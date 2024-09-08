@@ -60,16 +60,7 @@
   },
   "productName": "screenpipe",
   "identifier": "screenpi.pe",
-  "plugins": {
-    "updater": {
-      "active": false,
-      "dialog": true,
-      "endpoints": [
-        ""
-      ],
-      "pubkey": ""
-    }
-  },
+  "plugins": {},
   "app": {
     "trayIcon": {
       "id": "screenpipe_main",
