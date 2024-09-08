@@ -53,7 +53,12 @@ pub fn pcm_decode<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<(Vec<f32
         .make(&track.codec_params, &dec_opts)
         .expect("unsupported codec");
     let track_id = track.id;
-    let sample_rate = track.codec_params.sample_rate.unwrap_or(0);
+    let mut sample_rate = track.codec_params.sample_rate.unwrap_or(0);
+    debug!("Sample rate: {}", sample_rate);
+    if sample_rate == 0 {
+        debug!("Sample rate is 0, using 96000");
+        sample_rate = 96000;
+    }
     let mut pcm_data = Vec::new();
     debug!("Starting decode loop");
     // The decode loop.

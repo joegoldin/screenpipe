@@ -1,4 +1,5 @@
 use std::{
+    env,
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -424,9 +425,9 @@ enum Task {
 use reqwest::blocking::Client;
 use serde_json::Value;
 
-// Replace the get_deepgram_api_key function with this:
 fn get_deepgram_api_key() -> String {
-    "7ed2a159a094337b01fd8178b914b7ae0e77822d".to_string()
+    env::var("DEEPGRAM_API_KEY")
+        .expect("DEEPGRAM_API_KEY environment variable not set")
 }
 
 // TODO: this should use async reqwest not blocking, cause crash issue because all our code is async

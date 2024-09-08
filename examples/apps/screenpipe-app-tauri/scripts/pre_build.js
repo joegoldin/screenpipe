@@ -188,9 +188,9 @@ if (platform == 'windows') {
 
 	if (!(await fs.exists('tesseract'))) {
 		console.log('Setting up Tesseract for Windows...')
-		await $`${wgetPath} -nc  --no-check-certificate --show-progress ${tesseractUrl} -O ${tesseractInstaller}`
-		await $`"${process.cwd()}\\${tesseractInstaller}" /S /D=C:\\Program Files\\Tesseract-OCR`
-		await $`rm ${tesseractInstaller}`
+		// await $`${wgetPath} -nc  --no-check-certificate --show-progress ${tesseractUrl} -O ${tesseractInstaller}`
+		// await $`"${process.cwd()}\\${tesseractInstaller}" /S /D=C:\\Program Files\\Tesseract-OCR`
+		// await $`rm ${tesseractInstaller}`
 		// Replace the mv command with xcopy
 		await $`xcopy "C:\\Program Files\\Tesseract-OCR" tesseract /E /I /H /Y`
 		// Optionally, remove the original directory if needed
@@ -224,7 +224,7 @@ if (platform == 'windows') {
 	}
 
 	// Setup vcpkg packages
-	await $`C:\\vcpkg\\vcpkg.exe install ${config.windows.vcpkgPackages}`.quiet()
+	// await $`C:\\vcpkg\\vcpkg.exe install ${config.windows.vcpkgPackages}`.quiet()
 }
 
 async function getMostRecentBinaryPath(targetArch, paths) {

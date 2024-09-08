@@ -1,8 +1,8 @@
 use std::sync::Arc;
-use image::DynamicImage;
-// use image::{DynamicImage, ImageFormat};
+use image::{DynamicImage, RgbaImage};
+// use image::{DynamicImage, ImageFormat, RgbaImage};
 use xcap::{Monitor, Window, XCapError};
-use log::error;
+use log::{error, warn};
 // use log::{debug, error, info, warn};
 use std::time::Duration;
 use tokio::time;
@@ -75,11 +75,14 @@ pub async fn capture_all_visible_windows() -> Result<Vec<(DynamicImage, String, 
                 
                 match window.capture_image() {
                     Ok(buffer) => {
-                        let image = DynamicImage::ImageRgba8(image::ImageBuffer::from_raw(
+                        let image = DynamicImage::ImageRgba8(RgbaImage::from_raw(
                             buffer.width() as u32,
                             buffer.height() as u32,
                             buffer.into_raw(),
-                        ).unwrap());
+                        ).unwrap_or_else(|| {
+                            warn!("Failed to create image buffer for window {} on monitor {}. Creating empty image.", window_name, monitor.name());
+                            RgbaImage::new(1, 1)
+                        }));
 
                         // Save the image to the 'last_screenshots' directory
                         // let file_name = format!("monitor_{}_window_{:03}_{}.png", 
