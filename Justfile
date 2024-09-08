@@ -1,19 +1,19 @@
 set windows-shell := ["pwsh.exe", "-NoLogo", "-Command"]
 
-screenpipe:
-    sudo .\target\release\screenpipe.exe --ocr-engine windows-native --debug --audio-device "In 1-2 (MOTU M Series) (input)" --audio-device "Out 1-2 (MOTU M Series) (output)" --monitor-id 288362319 --use-pii-removal --audio-transcription-engine deepgram
-
-screenpipe-audio:
-    sudo .\target\release\screenpipe.exe --ocr-engine windows-native --debug --audio-device "In 1-2 (MOTU M Series) (input)" --audio-device "Out 1-2 (MOTU M Series) (output)" --monitor-id 288362319 --use-pii-removal --audio-transcription-engine deepgram --disable-vision
-
-screenpipe-video:
-    sudo .\target\release\screenpipe.exe --ocr-engine windows-native --debug --audio-device "In 1-2 (MOTU M Series) (input)" --audio-device "Out 1-2 (MOTU M Series) (output)" --monitor-id 288362319 --use-pii-removal --audio-transcription-engine deepgram --disable-audio
-
 build:
     cargo build --release
+
+screenpipe: build
+    sudo .\target\release\screenpipe.exe --ocr-engine windows-native --debug --audio-device "In 1-2 (MOTU M Series) (input)" --audio-device "Out 1-2 (MOTU M Series) (output)" --monitor-id 288362319 --use-pii-removal --audio-transcription-engine deepgram
+
+screenpipe-audio: build
+    sudo .\target\release\screenpipe.exe --ocr-engine windows-native --debug --audio-device "In 1-2 (MOTU M Series) (input)" --audio-device "Out 1-2 (MOTU M Series) (output)" --monitor-id 288362319 --use-pii-removal --audio-transcription-engine deepgram --disable-vision
+
+screenpipe-video: build
+    sudo .\target\release\screenpipe.exe --ocr-engine windows-native --debug --audio-device "In 1-2 (MOTU M Series) (input)" --audio-device "Out 1-2 (MOTU M Series) (output)" --monitor-id 288362319 --use-pii-removal --audio-transcription-engine deepgram --disable-audio
 
 build-tauri: build
     cd examples/apps/screenpipe-app-tauri && bun scripts/pre_build.js && bun tauri build
 
-dev-tauri:
+dev-tauri: build
     cd examples/apps/screenpipe-app-tauri && bun scripts/pre_build.js && bun tauri dev
