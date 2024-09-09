@@ -47,7 +47,7 @@ pub async fn list_monitors() -> Vec<Monitor> {
 
 pub async fn get_default_monitor() -> Monitor {
     let monitors = list_monitors().await;
-    return monitors.first().unwrap().clone();
+    return monitors.iter().find(|m| m.is_primary()).unwrap().clone();
 }
 
 pub async fn get_monitor_by_id(id: u32) -> Option<Monitor> {
