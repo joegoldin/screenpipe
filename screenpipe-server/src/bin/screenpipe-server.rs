@@ -329,8 +329,24 @@ async fn main() -> anyhow::Result<()> {
                     monitor_id,
                     cli.use_pii_removal,
                     cli.disable_vision,
-                )
-                .await;
+                    &vision_handle,
+                    &audio_handle,
+                    &cli.ignored_windows,
+                    &cli.included_windows,
+                    cli.deepgram_api_key.clone(),
+                );
+
+                let result = tokio::select! {
+                    result = recording_future => result,
+                    _ = shutdown_rx.recv() => {
+                        info!("Received shutdown signal for recording");
+                        break;
+                    }
+                    _ = async { if let Some(ref mut interval) = interval { interval.tick().await } else { std::future::pending().await } } => {
+                        info!("Restarting recording due to restart interval");
+                        continue;
+                    }
+                };
 
                 if let Err(e) = result {
                     error!("Continuous recording error: {:?}", e);

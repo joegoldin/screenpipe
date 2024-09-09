@@ -510,6 +510,7 @@ pub fn stt(
     file_path: &str,
     whisper_model: &WhisperModel,
     audio_transcription_engine: Arc<AudioTranscriptionEngine>,
+    deepgram_api_key: Option<String>,
 ) -> Result<String> {
     debug!("Starting speech to text for file: {}", file_path);
     let model = &whisper_model.model;
@@ -585,7 +586,13 @@ pub fn stt(
 
     if audio_transcription_engine == AudioTranscriptionEngine::Deepgram.into() {
         // Deepgram implementation
-        let api_key = get_deepgram_api_key();
+        //check if key is set or empty or no chars in it
+        let api_key = if deepgram_api_key.clone().is_some() && !deepgram_api_key.clone().unwrap().is_empty() && deepgram_api_key.clone().unwrap().chars().count() > 0 {
+            deepgram_api_key.clone().unwrap()
+        } else {
+            get_deepgram_api_key()
+        };
+        info!("Using Deepgram API key: {}...", &api_key[..8]);
         match transcribe_with_deepgram(&api_key, &speech_frames) {
             Ok(transcription) => Ok(transcription),
             Err(e) => {
@@ -724,6 +731,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 pub async fn create_whisper_channel(
     audio_transcription_engine: Arc<AudioTranscriptionEngine>,
+    deepgram_api_key: Option<String>,
 ) -> Result<(
     UnboundedSender<AudioInput>,
     UnboundedReceiver<TranscriptionResult>,
@@ -760,7 +768,7 @@ pub async fn create_whisper_channel(
                         #[cfg(target_os = "macos")]
                         {
                             autoreleasepool(|| {
-                                match stt(&input.path, &whisper_model, audio_transcription_engine.clone()) {
+                                match stt(&input.path, &whisper_model, audio_transcription_engine.clone(), deepgram_api_key.clone()) {
                                     Ok(transcription) => TranscriptionResult {
                                         input: input.clone(),
                                         transcription: Some(transcription),
@@ -785,7 +793,7 @@ pub async fn create_whisper_channel(
                             unreachable!("This code should not be reached on non-macOS platforms")
                         }
                     } else {
-                        match stt(&input.path, &whisper_model, audio_transcription_engine.clone()) {
+                        match stt(&input.path, &whisper_model, audio_transcription_engine.clone(), deepgram_api_key.clone()) {
                             Ok(transcription) => TranscriptionResult {
                                 input: input.clone(),
                                 transcription: Some(transcription),

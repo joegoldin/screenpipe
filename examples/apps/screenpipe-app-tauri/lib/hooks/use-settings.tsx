@@ -7,6 +7,7 @@ import { Pipe } from "./use-pipes";
 
 const defaultSettings: Settings = {
   openaiApiKey: "",
+  deepgramApiKey: "",
   useOllama: false,
   ollamaUrl: "http://localhost:11434",
   isLoading: true,
@@ -39,6 +40,7 @@ const defaultSettings: Settings = {
 
 export interface Settings {
   openaiApiKey: string;
+  deepgramApiKey: string;
   useOllama: boolean;
   ollamaUrl: string;
   isLoading: boolean;
@@ -96,6 +98,8 @@ export function useSettings() {
       try {
         await store!.load();
         const savedKey = ((await store!.get("openaiApiKey")) as string) || "";
+        const savedDeepgramKey =
+          ((await store!.get("deepgramApiKey")) as string) || "";
         const savedUseOllama =
           ((await store!.get("useOllama")) as boolean) || false;
         const savedOllamaUrl =
@@ -131,6 +135,7 @@ export function useSettings() {
           ((await store!.get("disableAudio")) as boolean) || false;
         setSettings({
           openaiApiKey: savedKey,
+          deepgramApiKey: savedDeepgramKey,
           useOllama: savedUseOllama,
           isLoading: false,
           ollamaUrl: savedOllamaUrl,

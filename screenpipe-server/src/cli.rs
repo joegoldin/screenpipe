@@ -150,4 +150,67 @@ pub struct Cli {
     /// Disable vision recording
     #[arg(long, default_value_t = false)]
     pub disable_vision: bool,
+
+    /// List of windows to ignore (by title) for screen recording - we use contains to match, example:
+    /// --ignored-windows "Spotify" --ignored-windows "Bit" will ignore both "Bitwarden" and "Bittorrent"
+    /// --ignored-windows "porn" will ignore "pornhub" and "youporn"
+    #[arg(long)]
+    pub ignored_windows: Vec<String>,
+
+    /// List of windows to include (by title) for screen recording - we use contains to match, example:
+    /// --included-windows "Chrome" will include "Google Chrome"
+    /// --included-windows "WhatsApp" will include "WhatsApp"
+    #[arg(long)]
+    pub included_windows: Vec<String>,
+
+    #[command(subcommand)]
+    pub command: Option<Command>,
+
+    /// Deepgram API Key for audio transcription
+    #[arg(long = "deepgram-api-key")]
+    pub deepgram_api_key: Option<String>,
+}
+
+#[derive(Subcommand)]
+pub enum Command {
+    /// Pipe management commands
+    Pipe {
+        #[command(subcommand)]
+        subcommand: PipeCommand,
+    },
+    // ... (other top-level commands if any)
+}
+
+
+#[derive(Subcommand)]
+pub enum PipeCommand {
+    /// List all pipes
+    List,
+    /// Download a new pipe
+    Download {
+        /// URL of the pipe to download
+        url: String,
+    },
+    /// Get info for a specific pipe
+    Info {
+        /// ID of the pipe
+        id: String,
+    },
+    /// Enable a pipe
+    Enable {
+        /// ID of the pipe to enable
+        id: String,
+    },
+    /// Disable a pipe
+    Disable {
+        /// ID of the pipe to disable
+        id: String,
+    },
+    /// Update pipe configuration
+    Update {
+        /// ID of the pipe to update
+        id: String,
+        /// New configuration as a JSON string
+        config: String,
+    },
 }

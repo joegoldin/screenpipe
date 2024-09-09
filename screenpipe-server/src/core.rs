@@ -33,6 +33,11 @@ pub async fn start_continuous_recording(
     monitor_id: u32,
     use_pii_removal: bool,
     vision_disabled: bool,
+    vision_handle: &Handle,
+    audio_handle: &Handle,
+    ignored_windows: &[String],
+    include_windows: &[String],
+    deepgram_api_key: Option<String>,
 ) -> Result<()> {
     let (whisper_sender, whisper_receiver, whisper_shutdown_flag) = if audio_disabled {
         // Create a dummy channel if no audio devices are available, e.g. audio disabled
@@ -48,7 +53,7 @@ pub async fn start_continuous_recording(
             Arc::new(AtomicBool::new(false)),
         )
     } else {
-        create_whisper_channel(audio_transcription_engine.clone()).await?
+        create_whisper_channel(audio_transcription_engine.clone(), deepgram_api_key).await?
     };
     let whisper_sender_clone = whisper_sender.clone();
     let db_manager_video = Arc::clone(&db);
