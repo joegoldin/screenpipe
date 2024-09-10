@@ -106,10 +106,16 @@ export function RecordingSettings({
 
         console.log("localSettings", localSettings);
         // Update local settings if current values are default
-        if (localSettings.monitorId === "default" && monitors.length > 0) {
+        if (
+          localSettings.monitorIds.length === 1 &&
+          localSettings.monitorIds[0] === "default" &&
+          monitors.length > 0
+        ) {
           setLocalSettings({
             ...localSettings,
-            monitorId: monitors.find((monitor) => monitor.is_default)?.id!,
+            monitorIds: monitors
+              .filter((monitor) => monitor.is_default)
+              .map((monitor) => monitor.id),
           });
         }
         if (
@@ -145,7 +151,7 @@ export function RecordingSettings({
       const settingsToUpdate = {
         audioTranscriptionEngine: localSettings.audioTranscriptionEngine,
         ocrEngine: localSettings.ocrEngine,
-        monitorId: localSettings.monitorId,
+        monitorIds: localSettings.monitorIds,
         audioDevices: localSettings.audioDevices,
         usePiiRemoval: localSettings.usePiiRemoval,
         restartInterval: localSettings.restartInterval,
@@ -220,7 +226,11 @@ export function RecordingSettings({
   };
 
   const handleMonitorChange = (value: string) => {
-    setLocalSettings({ ...localSettings, monitorId: value });
+    const updatedMonitors = localSettings.monitorIds.includes(value)
+      ? localSettings.monitorIds.filter((id) => id !== value)
+      : [...localSettings.monitorIds, value];
+
+    setLocalSettings({ ...localSettings, monitorIds: updatedMonitors });
   };
 
   const handleAudioDeviceChange = (currentValue: string) => {
@@ -326,30 +336,57 @@ export function RecordingSettings({
 
             <div className="flex flex-col space-y-2">
               <Label
-                htmlFor="monitorId"
+                htmlFor="monitorIds"
                 className="flex items-center space-x-2"
               >
                 <Monitor className="h-4 w-4" />
-                <span>monitor</span>
+                <span>monitors</span>
               </Label>
-              <Select
-                onValueChange={handleMonitorChange}
-                defaultValue={localSettings.monitorId}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="select monitor" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableMonitors.map((monitor) => (
-                    <SelectItem key={monitor.id} value={monitor.id}>
-                      {monitor.id}. {monitor.name}{" "}
-                      {monitor.is_default ? "(default)" : ""} - {monitor.width}x
-                      {monitor.height}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-between">
+                    {localSettings.monitorIds.length > 0
+                      ? `${localSettings.monitorIds.length} monitor(s) selected`
+                      : "select monitors"}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0">
+                  <Command>
+                    <CommandInput placeholder="search monitors..." />
+                    <CommandList>
+                      <CommandEmpty>no monitor found.</CommandEmpty>
+                      <CommandGroup>
+                        {availableMonitors.map((monitor) => (
+                          <CommandItem
+                            key={monitor.id}
+                            value={monitor.id}
+                            onSelect={handleMonitorChange}
+                          >
+                            <div className="flex items-center">
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  localSettings.monitorIds.includes(monitor.id)
+                                    ? "opacity-100"
+                                    : "opacity-0"
+                                )}
+                              />
+                              <span>
+                                {monitor.id}. {monitor.name}{" "}
+                                {monitor.is_default ? "(default)" : ""} - {monitor.width}x
+                                {monitor.height}
+                              </span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
+
             <div className="flex flex-col space-y-2">
               <Label
                 htmlFor="audioDevices"

@@ -100,13 +100,14 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Result<CommandChild, String> {
     .map_err(|e| e.to_string())?
     .unwrap_or(String::from("default"));
 
-    let monitor_id = with_store(app.clone(), stores.clone(), path.clone(), |store| {
+    let monitor_ids = with_store(app.clone(), stores.clone(), path.clone(), |store| {
         Ok(store
-            .get("monitorId")
-            .and_then(|v| v.as_str().map(String::from)))
+            .get("monitorIds")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect::<Vec<String>>()))
     })
     .map_err(|e| e.to_string())?
-    .unwrap_or(String::from("default"));
+    .unwrap_or_else(|| vec![String::from("default")]);
 
     let audio_devices = with_store(app.clone(), stores.clone(), path.clone(), |store| {
         Ok(store
@@ -162,8 +163,6 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Result<CommandChild, String> {
     })
     .map_err(|e| e.to_string())?;
 
-
-
     let deepgram_api_key = with_store(app.clone(), stores.clone(), path.clone(), |store| {
         Ok(store
             .get("deepgramApiKey")
@@ -196,10 +195,12 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Result<CommandChild, String> {
         let model = ocr_engine.as_str();
         args.push(model);
     }
-    if monitor_id != "default" {
-        args.push("--monitor-id");
-        let id = monitor_id.as_str();
-        args.push(id);
+
+    if !monitor_ids.is_empty() && monitor_ids[0] != "default" {
+        for id in &monitor_ids {
+            args.push("--monitor-id");
+            args.push(id);
+        }
     }
 
     if deepgram_api_key != "default" {
