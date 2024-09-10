@@ -264,11 +264,6 @@ async fn main() -> anyhow::Result<()> {
 
     let warning_ocr_engine_clone = cli.ocr_engine.clone();
     let warning_audio_transcription_engine_clone = cli.audio_transcription_engine.clone();
-    let monitor_ids = if cli.monitor_id.is_empty() {
-        all_monitors.iter().map(|m| m.id()).collect::<Vec<_>>()
-    } else {
-        cli.monitor_id.clone()
-    };
 
     let ocr_engine_clone = cli.ocr_engine.clone();
     let restart_interval = cli.restart_interval;
@@ -286,7 +281,11 @@ async fn main() -> anyhow::Result<()> {
     let vision_control_clone = Arc::clone(&vision_control);
     let shutdown_tx_clone = shutdown_tx.clone();
     let friend_wearable_uid_clone = friend_wearable_uid.clone(); // Clone here
-    let monitor_ids_clone = cli.monitor_id.clone();
+    let monitor_ids = if cli.monitor_id.is_empty() {
+        all_monitors.iter().map(|m| m.id()).collect::<Vec<_>>()
+    } else {
+        cli.monitor_id.clone()
+    };
 
     let fps = if cli.fps.is_finite() && cli.fps > 0.0 {
         cli.fps
@@ -321,7 +320,7 @@ async fn main() -> anyhow::Result<()> {
                     Arc::new(cli.audio_transcription_engine.clone().into()),
                     Arc::new(cli.ocr_engine.clone().into()),
                     friend_wearable_uid_clone.clone(),
-                    monitor_ids_clone.clone(),
+                    monitor_ids.clone(),
                     cli.use_pii_removal,
                     cli.disable_vision,
                     &vision_handle,

@@ -226,9 +226,20 @@ export function RecordingSettings({
   };
 
   const handleMonitorChange = (value: string) => {
-    const updatedMonitors = localSettings.monitorIds.includes(value)
-      ? localSettings.monitorIds.filter((id) => id !== value)
-      : [...localSettings.monitorIds, value];
+    let updatedMonitors: string[];
+
+    if (localSettings.monitorIds.includes(value)) {
+      // If the monitor is already selected, try to remove it
+      updatedMonitors = localSettings.monitorIds.filter(id => id !== value);
+    } else {
+      // If the monitor is not selected, add it
+      updatedMonitors = [...localSettings.monitorIds, value];
+    }
+
+    // If no monitors are selected, keep the current selection
+    if (updatedMonitors.length === 0) {
+      updatedMonitors = localSettings.monitorIds;
+    }
 
     setLocalSettings({ ...localSettings, monitorIds: updatedMonitors });
   };
@@ -361,7 +372,7 @@ export function RecordingSettings({
                           <CommandItem
                             key={monitor.id}
                             value={monitor.id}
-                            onSelect={handleMonitorChange}
+                            onSelect={() => handleMonitorChange(monitor.id)}
                           >
                             <div className="flex items-center">
                               <Check

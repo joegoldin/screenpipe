@@ -104,10 +104,10 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Result<CommandChild, String> {
         Ok(store
             .get("monitorIds")
             .and_then(|v| v.as_array())
-            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect::<Vec<String>>()))
+            .map(|arr| arr.to_vec()))
     })
     .map_err(|e| e.to_string())?
-    .unwrap_or_else(|| vec![String::from("default")]);
+    .unwrap_or_default();
 
     let audio_devices = with_store(app.clone(), stores.clone(), path.clone(), |store| {
         Ok(store
@@ -196,11 +196,21 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Result<CommandChild, String> {
         args.push(model);
     }
 
-    if !monitor_ids.is_empty() && monitor_ids[0] != "default" {
+    let mut monitor_id_strings = Vec::new();
+    if !monitor_ids.is_empty() {
         for id in &monitor_ids {
-            args.push("--monitor-id");
-            args.push(id);
+            if let Some(id_value) = id.as_u64() {
+                let id_str = id_value.to_string();
+                if id_str != "default" {
+                    monitor_id_strings.push(id_str);
+                }
+            }
         }
+    }
+    info!("Monitor IDs: {:?}", monitor_id_strings);
+    for id_str in &monitor_id_strings {
+        args.push("--monitor-id");
+        args.push(id_str.as_str());
     }
 
     if deepgram_api_key != "default" {
@@ -238,7 +248,7 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Result<CommandChild, String> {
         }
     }
 
-    // args.push("--debug");
+    args.push("--debug");
 
     if cfg!(windows) {
         let exe_dir = env::current_exe()
