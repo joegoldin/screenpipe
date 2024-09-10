@@ -24,8 +24,7 @@ use screenpipe_server::{
     cli::{Cli, CliAudioTranscriptionEngine, CliOcrEngine, Command, PipeCommand},
     start_continuous_recording, DatabaseManager, PipeManager, ResourceMonitor, Server,
 };
-use screenpipe_vision::monitor::{get_monitor_by_id, list_monitors};
-use screenpipe_vision::utils::OcrEngine as CoreOcrEngine;
+use screenpipe_vision::monitor::list_monitors;
 use serde_json::{json, Value};
 use tokio::{
     runtime::Runtime,
@@ -410,7 +409,7 @@ async fn main() -> anyhow::Result<()> {
     );
     println!(
         "│ Monitor IDs         │ {:<34} │",
-        format_cell(&format!("{:?}", monitor_ids), VALUE_WIDTH)
+        format_cell(&format!("{:?}", cli.monitor_id), VALUE_WIDTH)
     );
     println!(
         "│ Data Directory      │ {:<34} │",

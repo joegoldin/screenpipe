@@ -207,7 +207,6 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Result<CommandChild, String> {
             }
         }
     }
-    info!("Monitor IDs: {:?}", monitor_id_strings);
     for id_str in &monitor_id_strings {
         args.push("--monitor-id");
         args.push(id_str.as_str());
