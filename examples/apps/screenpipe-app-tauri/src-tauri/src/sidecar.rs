@@ -223,6 +223,20 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Result<CommandChild, String> {
         args.push("--disable-audio");
     }
 
+    if !ignored_windows.is_empty() {
+        for window in &ignored_windows {
+            args.push("--ignored-windows");
+            args.push(window);
+        }
+    }
+
+    if !included_windows.is_empty() {
+        for window in &included_windows {
+            args.push("--included-windows");
+            args.push(window);
+        }
+    }
+
     // args.push("--debug");
 
     if cfg!(windows) {

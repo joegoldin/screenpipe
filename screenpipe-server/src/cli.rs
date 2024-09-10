@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use screenpipe_audio::AudioTranscriptionEngine as CoreAudioTranscriptionEngine;
 use screenpipe_vision::utils::OcrEngine as CoreOcrEngine;
 use clap::ValueEnum;

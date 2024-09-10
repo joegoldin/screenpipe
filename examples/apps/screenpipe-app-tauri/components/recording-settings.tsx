@@ -16,6 +16,7 @@ import {
   HelpCircle,
   Mic,
   Monitor,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -176,6 +177,38 @@ export function RecordingSettings({
     } finally {
       setIsUpdating(false);
     }
+  };
+
+  const handleAddIgnoredWindow = (value: string) => {
+    if (value && !localSettings.ignoredWindows.includes(value)) {
+      setLocalSettings({
+        ...localSettings,
+        ignoredWindows: [...localSettings.ignoredWindows, value],
+      });
+    }
+  };
+
+  const handleRemoveIgnoredWindow = (value: string) => {
+    setLocalSettings({
+      ...localSettings,
+      ignoredWindows: localSettings.ignoredWindows.filter((w) => w !== value),
+    });
+  };
+
+  const handleAddIncludedWindow = (value: string) => {
+    if (value && !localSettings.includedWindows.includes(value)) {
+      setLocalSettings({
+        ...localSettings,
+        includedWindows: [...localSettings.includedWindows, value],
+      });
+    }
+  };
+
+  const handleRemoveIncludedWindow = (value: string) => {
+    setLocalSettings({
+      ...localSettings,
+      includedWindows: localSettings.includedWindows.filter((w) => w !== value),
+    });
   };
 
   const handleAudioTranscriptionModelChange = (value: string) => {
@@ -477,6 +510,134 @@ export function RecordingSettings({
                     </Tooltip>
                   </TooltipProvider>
                 </Label>
+              </div>
+            </div>
+
+            <div className="flex flex-col space-y-2">
+              <Label
+                htmlFor="ignoredWindows"
+                className="flex items-center space-x-2"
+              >
+                <span>ignored windows</span>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <HelpCircle className="h-4 w-4" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>
+                        windows to ignore during screen recording
+                        (case-insensitive), example:
+                        <br />
+                        - &quot;bit&quot; will ignore &quot;Bitwarden&quot; and &quot;bittorrent&quot;
+                        <br />
+                        - &quot;incognito&quot; will ignore tabs, windows that contains the word &quot;incognito&quot;
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </Label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {localSettings.ignoredWindows.map((window) => (
+                  <Badge
+                    key={window}
+                    variant="secondary"
+                    className="flex items-center gap-1"
+                  >
+                    {window}
+                    <X
+                      className="h-3 w-3 cursor-pointer"
+                      onClick={() => handleRemoveIgnoredWindow(window)}
+                    />
+                  </Badge>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  id="ignoredWindows"
+                  placeholder="add window to ignore"
+                  onKeyPress={(e) => {
+                    if (e.key === "Enter") {
+                      handleAddIgnoredWindow(e.currentTarget.value);
+                      e.currentTarget.value = "";
+                    }
+                  }}
+                />
+                <Button
+                  onClick={() => {
+                    const input = document.getElementById(
+                      "ignoredWindows"
+                    ) as HTMLInputElement;
+                    handleAddIgnoredWindow(input.value);
+                    input.value = "";
+                  }}
+                >
+                  add
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex flex-col space-y-2">
+              <Label
+                htmlFor="includedWindows"
+                className="flex items-center space-x-2"
+              >
+                <span>included windows</span>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <HelpCircle className="h-4 w-4" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>
+                        windows to include during screen recording
+                        (case-insensitive), example:
+                        <br />
+                        - &quot;chrome&quot; will match &quot;Google Chrome&quot;
+                        <br />
+                        - &quot;bitwarden&quot; will match &quot;Bitwarden&quot; and &quot;bittorrent&quot;
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </Label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {localSettings.includedWindows.map((window) => (
+                  <Badge
+                    key={window}
+                    variant="secondary"
+                    className="flex items-center gap-1"
+                  >
+                    {window}
+                    <X
+                      className="h-3 w-3 cursor-pointer"
+                      onClick={() => handleRemoveIncludedWindow(window)}
+                    />
+                  </Badge>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  id="includedWindows"
+                  placeholder="add window to include"
+                  onKeyPress={(e) => {
+                    if (e.key === "Enter") {
+                      handleAddIncludedWindow(e.currentTarget.value);
+                      e.currentTarget.value = "";
+                    }
+                  }}
+                />
+                <Button
+                  onClick={() => {
+                    const input = document.getElementById(
+                      "includedWindows"
+                    ) as HTMLInputElement;
+                    handleAddIncludedWindow(input.value);
+                    input.value = "";
+                  }}
+                >
+                  add
+                </Button>
               </div>
             </div>
 

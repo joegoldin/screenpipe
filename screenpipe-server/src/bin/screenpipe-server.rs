@@ -15,14 +15,13 @@ use crossbeam::queue::SegQueue;
 use dirs::home_dir;
 use futures::{pin_mut, stream::FuturesUnordered, StreamExt};
 use log::{debug, error, info};
-use screenpipe_audio::AudioTranscriptionEngine as CoreAudioTranscriptionEngine;
 use screenpipe_audio::{
     default_input_device, default_output_device, list_audio_devices, parse_audio_device,
     AudioDevice, DeviceControl,
 };
 use screenpipe_core::find_ffmpeg_path;
 use screenpipe_server::{
-    cli::{Cli, CliAudioTranscriptionEngine, CliOcrEngine},
+    cli::{Cli, CliAudioTranscriptionEngine, CliOcrEngine, Command, PipeCommand},
     start_continuous_recording, DatabaseManager, PipeManager, ResourceMonitor, Server,
 };
 use screenpipe_vision::monitor::{get_monitor_by_id, list_monitors};
@@ -31,7 +30,7 @@ use serde_json::{json, Value};
 use tokio::{
     runtime::Runtime,
     signal,
-    sync::mpsc::channel,
+    sync::{broadcast, mpsc::channel},
     time::{interval_at, Instant},
 };
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
@@ -77,6 +76,17 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let local_data_dir = get_base_dir(cli.data_dir)?;
     let local_data_dir_clone = local_data_dir.clone();
+
+    let pipe_manager = Arc::new(PipeManager::new(local_data_dir_clone.clone()));
+
+    if let Some(pipe_command) = cli.command {
+        match pipe_command {
+            Command::Pipe { subcommand } => {
+                handle_pipe_command(subcommand, &pipe_manager).await?;
+                return Ok(());
+            }
+        }
+    }
 
     if find_ffmpeg_path().is_none() {
         eprintln!("ffmpeg not found. Please install ffmpeg and ensure it is in your PATH.");
@@ -220,12 +230,12 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let (restart_sender, mut restart_receiver) = channel(10);
+    let (restart_sender, _restart_receiver) = channel(10);
     let resource_monitor = ResourceMonitor::new(
         cli.self_healing,
         Duration::from_secs(60),
         3,
-        restart_sender,
+        restart_sender, // TODO: remove self healing its dead code atm
         cli.port,
     );
     resource_monitor.start_monitoring(Duration::from_secs(10));
@@ -304,8 +314,8 @@ async fn main() -> anyhow::Result<()> {
                     output_path_clone.clone(),
                     fps,
                     Duration::from_secs(cli.audio_chunk_duration),
-                    vision_control,
-                    audio_devices_control,
+                    vision_control_clone.clone(),
+                    audio_devices_control.clone(),
                     cli.disable_audio,
                     cli.save_text_files,
                     Arc::new(cli.audio_transcription_engine.clone().into()),
@@ -336,23 +346,22 @@ async fn main() -> anyhow::Result<()> {
                 if let Err(e) = result {
                     error!("Continuous recording error: {:?}", e);
                 }
-            });
-            debug!("Recording task started");
 
-            // Short delay before restarting to avoid rapid restarts
-            tokio::time::sleep(Duration::from_secs(1)).await;
-        }
-    });
+                if interval.is_none() {
+                    break;
+                }
+            }
+
+            drop(vision_runtime);
+            drop(audio_runtime);
+        })
+    };
 
     let local_data_dir_clone_2 = local_data_dir_clone.clone();
-    let pipe_manager = Arc::new(PipeManager::new(local_data_dir_clone.clone()));
 
     let api_plugin = |req: &axum::http::Request<axum::body::Body>| {
-        // Custom plugin logic here
-        // For example, using PostHog for tracking:
         if req.uri().path() == "/search" {
             // Track search requests
-            // posthog.capture("search_request", {...})
         }
     };
     let server = Server::new(
@@ -500,7 +509,6 @@ async fn main() -> anyhow::Result<()> {
             if let Some(result) = pipe_futures.next().await {
                 info!("Pipe completed: {:?}", result);
             } else {
-                // Sleep for a while before checking again
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             }
         }
@@ -511,6 +519,7 @@ async fn main() -> anyhow::Result<()> {
     pin_mut!(ctrl_c_future);
 
     tokio::select! {
+        _ = handle => info!("Recording completed"),
         result = &mut server_future => {
             match result {
                 Ok(_) => info!("Server stopped normally"),
@@ -520,11 +529,60 @@ async fn main() -> anyhow::Result<()> {
         _ = &mut pipes_future => {
             info!("All pipes completed, but server is still running");
         }
-        _ = &mut ctrl_c_future => {
-            info!("Received Ctrl+C, shutting down...");
+        _ = ctrl_c_future => {
+            info!("Received Ctrl+C, initiating shutdown");
+            let _ = shutdown_tx.send(());
         }
     }
 
     info!("Shutdown complete");
+    Ok(())
+}
+
+async fn handle_pipe_command(pipe: PipeCommand, pipe_manager: &PipeManager) -> anyhow::Result<()> {
+    // Handle pipe subcommands
+    match pipe {
+        PipeCommand::List => {
+            let pipes = pipe_manager.list_pipes().await;
+            println!("Available pipes:");
+            for pipe in pipes {
+                println!("  ID: {}, Enabled: {}", pipe.id, pipe.enabled);
+            }
+        }
+        PipeCommand::Download { url } => match pipe_manager.download_pipe(&url).await {
+            Ok(pipe_id) => println!("Pipe downloaded successfully. ID: {}", pipe_id),
+            Err(e) => eprintln!("Failed to download pipe: {}", e),
+        },
+        PipeCommand::Info { id } => match pipe_manager.get_pipe_info(&id).await {
+            Some(info) => println!("Pipe info: {:?}", info),
+            None => eprintln!("Pipe not found"),
+        },
+        PipeCommand::Enable { id } => {
+            match pipe_manager
+                .update_config(&id, json!({"enabled": true}))
+                .await
+            {
+                Ok(_) => println!("Pipe {} enabled", id),
+                Err(e) => eprintln!("Failed to enable pipe: {}", e),
+            }
+        }
+        PipeCommand::Disable { id } => {
+            match pipe_manager
+                .update_config(&id, json!({"enabled": false}))
+                .await
+            {
+                Ok(_) => println!("Pipe {} disabled", id),
+                Err(e) => eprintln!("Failed to disable pipe: {}", e),
+            }
+        }
+        PipeCommand::Update { id, config } => {
+            let config: Value = serde_json::from_str(&config)
+                .map_err(|e| anyhow::anyhow!("Invalid JSON: {}", e))?;
+            match pipe_manager.update_config(&id, config).await {
+                Ok(_) => println!("Pipe {} config updated", id),
+                Err(e) => eprintln!("Failed to update pipe config: {}", e),
+            }
+        }
+    }
     Ok(())
 }

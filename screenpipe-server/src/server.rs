@@ -7,10 +7,14 @@ use axum::{
 };
 use crossbeam::queue::SegQueue;
 use futures::future::try_join_all;
-use screenpipe_core::{download_pipe, run_pipe};
+use screenpipe_core::download_pipe;
 use screenpipe_vision::monitor::list_monitors;
 
-use crate::{db::TagContentType, ContentType, DatabaseManager, SearchResult};
+use crate::{
+    db::TagContentType,
+    pipe_manager::{PipeInfo, PipeManager},
+    ContentType, DatabaseManager, SearchResult,
+};
 use crate::{plugin::ApiPluginLayer, video_utils::extract_frame};
 use chrono::{DateTime, Utc};
 use log::{debug, error, info};
@@ -21,15 +25,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
     collections::HashMap,
-    future::Future,
     net::SocketAddr,
     path::PathBuf,
     sync::{atomic::AtomicBool, Arc},
     time::Duration,
 };
-use tokio::io::AsyncWriteExt;
 
-use tokio::{fs::File, net::TcpListener};
+use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 use tower_http::{cors::CorsLayer, trace::DefaultMakeSpan};
 
@@ -406,18 +408,26 @@ pub(crate) async fn add_tags(
     State(state): State<Arc<AppState>>,
     Path((content_type, id)): Path<(String, i64)>,
     JsonResponse(payload): JsonResponse<AddTagsRequest>,
-) -> Result<JsonResponse<AddTagsResponse>, (StatusCode, String)> {
+) -> Result<JsonResponse<AddTagsResponse>, (StatusCode, JsonResponse<Value>)> {
     let content_type = match content_type.as_str() {
         "vision" => TagContentType::Vision,
         "audio" => TagContentType::Audio,
-        _ => return Err((StatusCode::BAD_REQUEST, "Invalid content type".to_string())),
+        _ => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                JsonResponse(json!({"error": "Invalid content type"})),
+            ))
+        }
     };
 
     match state.db.add_tags(id, content_type, payload.tags).await {
         Ok(_) => Ok(JsonResponse(AddTagsResponse { success: true })),
         Err(e) => {
             error!("Failed to add tags: {}", e);
-            Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                JsonResponse(json!({"error": e.to_string()})),
+            ))
         }
     }
 }
@@ -426,18 +436,26 @@ pub(crate) async fn remove_tags(
     State(state): State<Arc<AppState>>,
     Path((content_type, id)): Path<(String, i64)>,
     JsonResponse(payload): JsonResponse<RemoveTagsRequest>,
-) -> Result<JsonResponse<RemoveTagsResponse>, (StatusCode, String)> {
+) -> Result<JsonResponse<RemoveTagsResponse>, (StatusCode, JsonResponse<Value>)> {
     let content_type = match content_type.as_str() {
         "vision" => TagContentType::Vision,
         "audio" => TagContentType::Audio,
-        _ => return Err((StatusCode::BAD_REQUEST, "Invalid content type".to_string())),
+        _ => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                JsonResponse(json!({"error": "Invalid content type"})),
+            ))
+        }
     };
 
     match state.db.remove_tags(id, content_type, payload.tags).await {
         Ok(_) => Ok(JsonResponse(RemoveTagsResponse { success: true })),
         Err(e) => {
             error!("Failed to remove tag: {}", e);
-            Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                JsonResponse(json!({"error": e.to_string()})),
+            ))
         }
     }
 }
@@ -525,130 +543,6 @@ pub async fn health_check(State(state): State<Arc<AppState>>) -> JsonResponse<He
     })
 }
 
-// New structs for pipe management
-#[derive(Clone, Serialize)]
-pub struct PipeInfo {
-    pub id: String,
-    pub enabled: bool,
-    pub config: serde_json::Value,
-}
-
-pub struct PipeManager {
-    screenpipe_dir: PathBuf,
-}
-
-impl PipeManager {
-    pub fn new(screenpipe_dir: PathBuf) -> Self {
-        PipeManager { screenpipe_dir }
-    }
-
-    pub async fn start_pipe(
-        &self,
-        id: &str,
-    ) -> Result<impl Future<Output = Result<(), anyhow::Error>>, String> {
-        let pipes = self.list_pipes().await;
-
-        if let Some(_) = pipes.iter().find(|pipe| pipe.id == id) {
-            let pipe_id = id.to_string();
-            let screenpipe_dir = self.screenpipe_dir.clone();
-
-            let future = run_pipe(pipe_id.clone(), screenpipe_dir);
-
-            self.update_config(
-                id,
-                serde_json::json!({
-                    "enabled": true,
-                }),
-            )
-            .await?;
-
-            Ok(future)
-        } else {
-            Err("Pipe not found".to_string())
-        }
-    }
-
-    async fn update_config(&self, id: &str, new_config: Value) -> Result<(), String> {
-        info!("Updating config for pipe: {}", id);
-        let pipe_dir = self.screenpipe_dir.join("pipes").join(id);
-        let config_path = pipe_dir.join("pipe.json");
-
-        // Read the existing config
-        let config_str = tokio::fs::read_to_string(&config_path)
-            .await
-            .map_err(|e| format!("Failed to read pipe config: {}", e))?;
-
-        let mut config: Value = serde_json::from_str(&config_str)
-            .map_err(|e| format!("Failed to parse pipe config: {}", e))?;
-
-        // Update the config
-        if let Value::Object(existing_config) = &mut config {
-            if let Value::Object(updates) = new_config {
-                for (key, value) in updates {
-                    existing_config.insert(key, value);
-                }
-            } else {
-                return Err("New configuration must be an object".to_string());
-            }
-        } else {
-            return Err("Existing configuration is not an object".to_string());
-        }
-
-        // Write the updated config back to the file
-        let updated_config_str = serde_json::to_string_pretty(&config)
-            .map_err(|e| format!("Failed to serialize updated config: {}", e))?;
-
-        let mut file = File::create(&config_path)
-            .await
-            .map_err(|e| format!("Failed to open pipe config file for writing: {}", e))?;
-
-        file.write_all(updated_config_str.as_bytes())
-            .await
-            .map_err(|e| format!("Failed to write updated config: {}", e))?;
-
-        Ok(())
-    }
-
-    async fn get_pipe_info(&self, id: &str) -> Option<PipeInfo> {
-        let pipes = self.list_pipes().await;
-        pipes.iter().find(|pipe| pipe.id == id).cloned()
-    }
-
-    pub async fn list_pipes(&self) -> Vec<PipeInfo> {
-        let pipe_dir = self.screenpipe_dir.join("pipes");
-        let mut pipe_infos = Vec::new();
-
-        if let Ok(mut entries) = tokio::fs::read_dir(pipe_dir).await {
-            while let Ok(Some(entry)) = entries.next_entry().await {
-                let pipe_id = entry.file_name().to_string_lossy().into_owned();
-                let config_path = entry.path().join("pipe.json");
-                pipe_infos.push(async move {
-                    let config = tokio::fs::read_to_string(config_path).await?;
-                    let config: Value = serde_json::from_str(&config)?;
-                    debug!("Pipe config: {:?}", config);
-                    Ok::<_, anyhow::Error>(PipeInfo {
-                        id: pipe_id,
-                        enabled: config
-                            .get("enabled")
-                            .unwrap_or(&Value::Bool(false))
-                            .as_bool()
-                            .unwrap_or(false),
-                        config,
-                    })
-                });
-            }
-        }
-
-        match try_join_all(pipe_infos).await {
-            Ok(infos) => infos,
-            Err(e) => {
-                error!("Error listing pipes: {}", e);
-                Vec::new()
-            }
-        }
-    }
-}
-
 // Request and response structs
 #[derive(Deserialize)]
 struct DownloadPipeRequest {
@@ -670,7 +564,7 @@ struct UpdatePipeConfigRequest {
 async fn download_pipe_handler(
     State(state): State<Arc<AppState>>,
     JsonResponse(payload): JsonResponse<DownloadPipeRequest>,
-) -> Result<JsonResponse<serde_json::Value>, (StatusCode, String)> {
+) -> Result<JsonResponse<serde_json::Value>, (StatusCode, JsonResponse<Value>)> {
     debug!("Downloading pipe: {}", payload.url);
     match download_pipe(&payload.url, state.screenpipe_dir.clone()).await {
         Ok(pipe_dir) => {
@@ -683,7 +577,10 @@ async fn download_pipe_handler(
         }
         Err(e) => {
             error!("Failed to download pipe: {}", e);
-            Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                JsonResponse(json!({"error": e.to_string()})),
+            ))
         }
     }
 }
@@ -691,15 +588,9 @@ async fn download_pipe_handler(
 async fn run_pipe_handler(
     State(state): State<Arc<AppState>>,
     JsonResponse(payload): JsonResponse<RunPipeRequest>,
-) -> Result<JsonResponse<Value>, (StatusCode, String)> {
+) -> Result<JsonResponse<Value>, (StatusCode, JsonResponse<Value>)> {
     debug!("Starting pipe: {}", payload.pipe_id);
-    // match state.pipe_manager.start_pipe(&payload.pipe_id).await {
-    //     Ok(_) => Ok(JsonResponse(json!({
-    //         "message": format!("Pipe {} started", payload.pipe_id),
-    //         "pipe_id": payload.pipe_id
-    //     }))),
-    //     Err(e) => Err((StatusCode::BAD_REQUEST, e)),
-    // }
+
 
     match state
         .pipe_manager
@@ -715,14 +606,17 @@ async fn run_pipe_handler(
             "message": format!("Pipe {} started", payload.pipe_id),
             "pipe_id": payload.pipe_id
         }))),
-        Err(e) => Err((StatusCode::BAD_REQUEST, e)),
+        Err(e) => Err((
+            StatusCode::BAD_REQUEST,
+            JsonResponse(json!({"error": e.to_string()})),
+        )),
     }
 }
 
 async fn stop_pipe_handler(
     State(state): State<Arc<AppState>>,
     JsonResponse(payload): JsonResponse<RunPipeRequest>,
-) -> Result<JsonResponse<Value>, (StatusCode, String)> {
+) -> Result<JsonResponse<Value>, (StatusCode, JsonResponse<Value>)> {
     debug!("Stopping pipe: {}", payload.pipe_id);
     match state
         .pipe_manager
@@ -738,14 +632,17 @@ async fn stop_pipe_handler(
             "message": format!("Pipe {} stopped", payload.pipe_id),
             "pipe_id": payload.pipe_id
         }))),
-        Err(e) => Err((StatusCode::BAD_REQUEST, e)),
+        Err(e) => Err((
+            StatusCode::BAD_REQUEST,
+            JsonResponse(json!({"error": e.to_string()})),
+        )),
     }
 }
 
 async fn update_pipe_config_handler(
     State(state): State<Arc<AppState>>,
     JsonResponse(payload): JsonResponse<UpdatePipeConfigRequest>,
-) -> Result<JsonResponse<Value>, (StatusCode, String)> {
+) -> Result<JsonResponse<Value>, (StatusCode, JsonResponse<Value>)> {
     debug!("Updating pipe config for: {}", payload.pipe_id);
     match state
         .pipe_manager
@@ -756,18 +653,24 @@ async fn update_pipe_config_handler(
             "message": format!("Pipe {} config updated", payload.pipe_id),
             "pipe_id": payload.pipe_id
         }))),
-        Err(e) => Err((StatusCode::BAD_REQUEST, e)),
+        Err(e) => Err((
+            StatusCode::BAD_REQUEST,
+            JsonResponse(json!({"error": e.to_string()})),
+        )),
     }
 }
 
 async fn get_pipe_info_handler(
     State(state): State<Arc<AppState>>,
     Path(pipe_id): Path<String>,
-) -> Result<JsonResponse<PipeInfo>, (StatusCode, String)> {
+) -> Result<JsonResponse<PipeInfo>, (StatusCode, JsonResponse<Value>)> {
     debug!("Getting pipe info for: {}", pipe_id);
     match state.pipe_manager.get_pipe_info(&pipe_id).await {
         Some(info) => Ok(JsonResponse(info)),
-        None => Err((StatusCode::NOT_FOUND, "Pipe not found".to_string())),
+        None => Err((
+            StatusCode::NOT_FOUND,
+            JsonResponse(json!({"error": "Pipe not found"})),
+        )),
     }
 }
 
@@ -905,6 +808,10 @@ curl "http://localhost:3030/search?limit=5&offset=0&content_type=all&include_fra
 curl "http://localhost:3030/search?limit=5&offset=0&content_type=all&include_frames=true&start_time=$(date -u -v-30M +%Y-%m-%dT%H:%M:%SZ)&end_time=$(date -u -v-25M +%Y-%m-%dT%H:%M:%SZ)" | jq
 
 
+curl "http://localhost:3030/search?limit=1&offset=0&content_type=all&include_frames=true&start_time=$(date -u -v-30M +%Y-%m-%dT%H:%M:%SZ)&end_time=$(date -u -v-25M +%Y-%m-%dT%H:%M:%SZ)" | jq
+
+curl "http://localhost:3030/search?limit=1&offset=0&content_type=all&include_frames=true&start_time=$(date -u -v-30M +%Y-%m-%dT%H:%M:%SZ)&end_time=$(date -u -v-25M +%Y-%m-%dT%H:%M:%SZ)" | jq -r '.data[0].content.frame' | base64 --decode > /tmp/frame.png && open /tmp/frame.png
+
 # Search for content from the last 30 minutes
 curl "http://localhost:3030/search?limit=5&offset=0&content_type=all&start_time=$(date -u -v-5M +%Y-%m-%dT%H:%M:%SZ)" | jq
 
@@ -961,6 +868,10 @@ curl -X POST "http://localhost:3030/pipes/download" \
      -H "Content-Type: application/json" \
      -d '{"url": "./examples/typescript/pipe-stream-ocr-text"}' | jq
 
+curl -X POST "http://localhost:3030/pipes/download" \
+     -H "Content-Type: application/json" \
+     -d '{"url": "./examples/typescript/pipe-security-check"}' | jq
+
 
 curl -X POST "http://localhost:3030/pipes/download" \
      -H "Content-Type: application/json" \
@@ -974,6 +885,11 @@ curl "http://localhost:3030/pipes/info/pipe-stream-ocr-text" | jq
 curl -X POST "http://localhost:3030/pipes/enable" \
      -H "Content-Type: application/json" \
      -d '{"pipe_id": "pipe-stream-ocr-text"}' | jq
+
+
+     curl -X POST "http://localhost:3030/pipes/enable" \
+     -H "Content-Type: application/json" \
+     -d '{"pipe_id": "pipe-security-check"}' | jq
 
 # Stop a pipe
 curl -X POST "http://localhost:3030/pipes/disable" \

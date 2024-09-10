@@ -31,8 +31,17 @@ impl VideoCapture {
         save_text_files: bool,
         ocr_engine: Arc<OcrEngine>,
         monitor_id: u32,
+        ignore_list: &[String],
+        include_list: &[String],
     ) -> Self {
         info!("Starting new video capture");
+        let fps = if fps.is_finite() && fps > 0.0 {
+            fps
+        } else {
+            warn!("Invalid FPS value: {}. Using default of 1.0", fps);
+            1.0
+        };
+        let interval = Duration::from_secs_f64(1.0 / fps);
         let video_frame_queue = Arc::new(ArrayQueue::new(MAX_QUEUE_SIZE));
         let ocr_frame_queue = Arc::new(ArrayQueue::new(MAX_QUEUE_SIZE));
         let new_chunk_callback = Arc::new(new_chunk_callback);
@@ -41,13 +50,17 @@ impl VideoCapture {
         let capture_video_frame_queue = video_frame_queue.clone();
         let capture_ocr_frame_queue = ocr_frame_queue.clone();
         let (result_sender, mut result_receiver) = channel(512);
+        let ignore_list_clone = ignore_list.to_vec();
+        let include_list_clone = include_list.to_vec();
         let _capture_thread = tokio::spawn(async move {
             continuous_capture(
                 result_sender,
-                Duration::from_secs_f64(1.0 / fps),
+                interval,
                 save_text_files,
                 *ocr_engine,
                 monitor_id,
+                &ignore_list_clone,
+                &include_list_clone,
             )
             .await;
         });

@@ -16,6 +16,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::runtime::Handle;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;
 
@@ -59,9 +60,6 @@ pub async fn start_continuous_recording(
     let whisper_sender_clone = whisper_sender.clone();
     let db_manager_audio = Arc::clone(&db);
     let output_path_audio = Arc::clone(&output_path);
-
-    let friend_wearable_uid_video = friend_wearable_uid.clone();
-
     // Initialize friend wearable loop
     if let Some(uid) = &friend_wearable_uid {
         tokio::spawn(initialize_friend_wearable_loop(
@@ -107,8 +105,8 @@ pub async fn start_continuous_recording(
         })]
     };
 
-    let audio_handle = if !audio_disabled {
-        tokio::spawn(async move {
+    let audio_task = if !audio_disabled {
+        audio_handle.spawn(async move {
             record_audio(
                 db_manager_audio,
                 output_path_audio,
@@ -122,7 +120,7 @@ pub async fn start_continuous_recording(
             .await
         })
     } else {
-        tokio::spawn(async move {
+        audio_handle.spawn(async move {
             tokio::time::sleep(Duration::from_secs(60)).await;
             Ok(())
         })
@@ -163,6 +161,8 @@ async fn record_video(
     _friend_wearable_uid: Option<String>,
     monitor_id: u32,
     use_pii_removal: bool,
+    ignored_windows: &[String],
+    include_windows: &[String],
 ) -> Result<()> {
     debug!("record_video: Starting");
     let db_chunk_callback = Arc::clone(&db);
@@ -185,6 +185,8 @@ async fn record_video(
         save_text_files,
         Arc::clone(&ocr_engine),
         monitor_id,
+        ignored_windows,
+        include_windows,
     );
 
     while is_running.load(Ordering::SeqCst) {

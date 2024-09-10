@@ -51,6 +51,8 @@ pub fn compare_images_ssim(image1: &DynamicImage, image2: &DynamicImage) -> f64 
 
 pub async fn capture_screenshot(
     monitor: &Monitor,
+    ignore_list: &[String],
+    include_list: &[String],
 ) -> Result<
     (
         DynamicImage,
