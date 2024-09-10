@@ -27,7 +27,9 @@ use screenpipe_server::{
 };
 use screenpipe_vision::monitor::{get_monitor_by_id, list_monitors};
 use screenpipe_vision::utils::OcrEngine as CoreOcrEngine;
+use serde_json::{json, Value};
 use tokio::{
+    runtime::Runtime,
     signal,
     sync::mpsc::channel,
     time::{interval_at, Instant},
@@ -252,81 +254,64 @@ async fn main() -> anyhow::Result<()> {
 
     let warning_ocr_engine_clone = cli.ocr_engine.clone();
     let warning_audio_transcription_engine_clone = cli.audio_transcription_engine.clone();
-    let monitor_id = cli.monitor_id.unwrap_or(all_monitors.first().unwrap().id());
+    let monitor_ids = if cli.monitor_id.is_empty() {
+        all_monitors.iter().map(|m| m.id()).collect::<Vec<_>>()
+    } else {
+        cli.monitor_id.clone()
+    };
 
-    // try to use the monitor selected, if not available throw an error
-    get_monitor_by_id(monitor_id).await.unwrap_or_else(|| {
-        eprintln!(
-            "{}",
-            format!(
-                "Monitor with id {} not found. Try 'screenpipe --list-monitors'",
-                monitor_id
-            )
-            .red()
-        );
-        std::process::exit(1);
-    });
     let ocr_engine_clone = cli.ocr_engine.clone();
     let restart_interval = cli.restart_interval;
 
-    // Function to start or restart the recording task
-    let _start_recording = tokio::spawn(async move {
-        // hack
-        let mut recording_task = tokio::spawn(async move {});
-        let mut restart_timer = if restart_interval > 0 {
-            // Calculate the first restart time
-            let first_restart = Instant::now() + Duration::from_secs(restart_interval * 60);
-            Some(interval_at(
-                first_restart,
-                Duration::from_secs(restart_interval * 60),
-            ))
-        } else {
-            None
-        };
-        loop {
-            let db_clone = db.clone();
-            let local_data_dir = local_data_dir.clone();
-            let vision_control = vision_control.clone();
-            let audio_devices_control = audio_devices_control.clone();
-            let friend_wearable_uid_clone = friend_wearable_uid.clone(); // Clone for each iteration
+    let (shutdown_tx, _) = broadcast::channel::<()>(1);
 
-            tokio::select! {
-                _ = &mut recording_task => {
-                    debug!("Recording task ended. Restarting...");
-                }
-                Some(_) = restart_receiver.recv() => {
-                    info!("Received restart signal. Restarting recording task...");
-                    recording_task.abort();
-                }
-                _ = async { if let Some(timer) = &mut restart_timer {
-                    timer.tick().await
-                } else {
-                    std::future::pending().await
-                }}, if restart_interval > 0 => {
-                    info!("Periodic restart interval reached. Restarting recording task...");
-                    recording_task.abort();
-                }
-            }
-            let core_ocr_engine: CoreOcrEngine = cli.ocr_engine.clone().into();
-            let ocr_engine = Arc::new(core_ocr_engine);
-            let core_audio_transcription_engine: CoreAudioTranscriptionEngine =
-                cli.audio_transcription_engine.clone().into();
-            let audio_transcription_engine = Arc::new(core_audio_transcription_engine);
+    let audio_runtime = Runtime::new().unwrap();
+    let vision_runtime = Runtime::new().unwrap();
 
-            recording_task = tokio::spawn(async move {
-                let result = start_continuous_recording(
-                    db_clone,
-                    Arc::new(local_data_dir.join("data").to_string_lossy().into_owned()),
-                    cli.fps,
+    let audio_handle = audio_runtime.handle().clone();
+    let vision_handle = vision_runtime.handle().clone();
+
+    let db_clone = Arc::clone(&db);
+    let output_path_clone = Arc::new(local_data_dir.join("data").to_string_lossy().into_owned());
+    let vision_control_clone = Arc::clone(&vision_control);
+    let shutdown_tx_clone = shutdown_tx.clone();
+    let friend_wearable_uid_clone = friend_wearable_uid.clone(); // Clone here
+    let monitor_ids_clone = cli.monitor_id.clone();
+
+    let fps = if cli.fps.is_finite() && cli.fps > 0.0 {
+        cli.fps
+    } else {
+        eprintln!("Invalid FPS value: {}. Using default of 1.0", cli.fps);
+        1.0
+    };
+
+    let handle = {
+        let runtime = &tokio::runtime::Handle::current();
+        runtime.spawn(async move {
+            let mut interval = if restart_interval > 0 {
+                Some(interval_at(
+                    Instant::now() + Duration::from_secs(restart_interval * 60),
+                    Duration::from_secs(restart_interval * 60),
+                ))
+            } else {
+                None
+            };
+
+            loop {
+                let mut shutdown_rx = shutdown_tx_clone.subscribe();
+                let recording_future = start_continuous_recording(
+                    db_clone.clone(),
+                    output_path_clone.clone(),
+                    fps,
                     Duration::from_secs(cli.audio_chunk_duration),
                     vision_control,
                     audio_devices_control,
                     cli.disable_audio,
                     cli.save_text_files,
-                    audio_transcription_engine,
-                    ocr_engine,
-                    friend_wearable_uid_clone, // Use the cloned version
-                    monitor_id,
+                    Arc::new(cli.audio_transcription_engine.clone().into()),
+                    Arc::new(cli.ocr_engine.clone().into()),
+                    friend_wearable_uid_clone.clone(),
+                    monitor_ids_clone.clone(),
                     cli.use_pii_removal,
                     cli.disable_vision,
                     &vision_handle,
@@ -415,7 +400,10 @@ async fn main() -> anyhow::Result<()> {
         "│ OCR Engine          │ {:<34} │",
         format!("{:?}", ocr_engine_clone)
     );
-    println!("│ Monitor ID          │ {:<34} │", monitor_id);
+    println!(
+        "│ Monitor IDs         │ {:<34} │",
+        format_cell(&format!("{:?}", monitor_ids), VALUE_WIDTH)
+    );
     println!(
         "│ Data Directory      │ {:<34} │",
         local_data_dir_clone.display()

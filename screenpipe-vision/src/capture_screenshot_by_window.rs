@@ -35,68 +35,63 @@ impl From<XCapError> for CaptureError {
     }
 }
 
-pub async fn capture_all_visible_windows() -> Result<Vec<(DynamicImage, String, String, bool)>, Box<dyn Error>> {
-    let monitors = Monitor::all()?;
-    // info!("Found {} monitors", monitors.len());
-
+pub async fn capture_all_visible_windows(
+    monitor: &Monitor,
+    ignore_list: &[String],
+    include_list: &[String],
+) -> Result<Vec<(DynamicImage, String, String, bool)>, Box<dyn Error>> {
     let mut all_captured_images = Vec::new();
 
-    for monitor in monitors {
-        // debug!("Capturing windows for monitor: {:?}", monitor);
-
-        // info!("Attempting to get all windows for monitor {} with retry mechanism", monitor.name());
-        let windows = retry_with_backoff(|| {
+    let windows = retry_with_backoff(
+        || {
             let windows = Window::all()?;
             if windows.is_empty() {
                 Err(CaptureError::NoWindows)
             } else {
                 Ok(windows)
             }
-        }, 3, Duration::from_millis(500)).await?;
+        },
+        3,
+        Duration::from_millis(500),
+    )
+    .await?;
 
-        // let windows_count = windows.len();
-        // info!("Successfully retrieved {} windows for monitor {}", windows_count, monitor.name());
+    let focused_window = windows
+        .iter()
+        .find(|&w| is_valid_window(w, monitor, ignore_list, include_list));
 
-        // if windows_count == 0 {
-        //     warn!("No windows were retrieved for monitor {}. This might indicate an issue.", monitor.name());
-        // }
+    for window in &windows {
+        if is_valid_window(window, monitor, ignore_list, include_list) {
+            let app_name = window.app_name();
+            let window_name = window.title();
+            let is_focused = focused_window
+                .as_ref()
+                .map_or(false, |fw| fw.id() == window.id());
 
-        let focused_window = get_focused_window(Arc::new(monitor.clone())).await;
-
-        // Create 'last_screenshots' directory if it doesn't exist
-        // let screenshots_dir = Path::new("last_screenshots");
-        // fs::create_dir_all(screenshots_dir)?;
-
-        for (_index, window) in windows.into_iter().enumerate() {
-            if is_valid_window(&window, &monitor) {
-                let app_name = window.app_name();
-                let window_name = window.title();
-                let is_focused = focused_window.as_ref().map_or(false, |fw| fw.id() == window.id());
-                
-                match window.capture_image() {
-                    Ok(buffer) => {
-                        let image = DynamicImage::ImageRgba8(RgbaImage::from_raw(
+            match window.capture_image() {
+                Ok(buffer) => {
+                    let image = DynamicImage::ImageRgba8(
+                        image::ImageBuffer::from_raw(
                             buffer.width() as u32,
                             buffer.height() as u32,
                             buffer.into_raw(),
-                        ).unwrap_or_else(|| {
-                            warn!("Failed to create image buffer for window {} on monitor {}. Creating empty image.", window_name, monitor.name());
-                            RgbaImage::new(1, 1)
-                        }));
+                        )
+                        .unwrap(),
+                    );
 
-                        // Save the image to the 'last_screenshots' directory
-                        // let file_name = format!("monitor_{}_window_{:03}_{}.png", 
-                        //     sanitize_filename(&monitor.name()), index, sanitize_filename(&window_name));
-                        // let file_path = screenshots_dir.join(file_name);
-                        // image.save_with_format(&file_path, ImageFormat::Png)?;
-                        // info!("Saved screenshot: {:?}", file_path);
-
-                        all_captured_images.push((image, app_name.to_string(), window_name.to_string(), is_focused));
-                    },
-                    Err(e) => error!("Failed to capture image for window {} on monitor {}: {}", window_name, monitor.name(), e),
+                    all_captured_images.push((
+                        image,
+                        app_name.to_string(),
+                        window_name.to_string(),
+                        is_focused,
+                    ));
                 }
-            } else {
-                // debug!("Skipped invalid window: {} on monitor {}", window.title(), monitor.name());
+                Err(e) => error!(
+                    "Failed to capture image for window {} on monitor {}: {}",
+                    window_name,
+                    monitor.name(),
+                    e
+                ),
             }
         }
 
@@ -155,11 +150,4 @@ where
         }
     }
     unreachable!()
-}
-
-async fn get_focused_window(monitor: Arc<Monitor>) -> Option<Window> {
-    retry_with_backoff(|| -> Result<Option<Window>, CaptureError> {
-        let windows = Window::all()?;
-        Ok(windows.into_iter().find(|w| is_valid_window(w, &monitor)))
-    }, 3, Duration::from_millis(500)).await.ok().flatten()
 }
