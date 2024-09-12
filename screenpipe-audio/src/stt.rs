@@ -686,16 +686,16 @@ pub fn stt(
 fn resample(input: Vec<f32>, from_sample_rate: u32, to_sample_rate: u32) -> Result<Vec<f32>> {
     debug!("Resampling audio");
     let params = SincInterpolationParameters {
-        sinc_len: 256,
+        sinc_len: 1024,
         f_cutoff: 0.95,
-        interpolation: SincInterpolationType::Linear,
+        interpolation: SincInterpolationType::Quadratic,
         oversampling_factor: 256,
         window: WindowFunction::BlackmanHarris2,
     };
 
     let mut resampler = SincFixedIn::<f32>::new(
         to_sample_rate as f64 / from_sample_rate as f64,
-        2.0,
+        8.0,
         params,
         input.len(),
         1,
