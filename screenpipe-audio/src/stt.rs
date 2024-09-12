@@ -773,7 +773,7 @@ pub async fn create_whisper_channel(
                         #[cfg(target_os = "macos")]
                         {
                             autoreleasepool(|| {
-                                match stt(&input.path, &whisper_model, audio_transcription_engine.clone(), &mut *vad_engine, deepgram_api_key.clone(), is_output_device) {
+                                match stt(&input.path, &whisper_model, audio_transcription_engine.clone(), &mut *vad_engine, deepgram_api_key.clone()) {
                                     Ok(transcription) => TranscriptionResult {
                                         input: input.clone(),
                                         transcription: Some(transcription),
@@ -797,7 +797,7 @@ pub async fn create_whisper_channel(
                             unreachable!("This code should not be reached on non-macOS platforms")
                         }
                     } else {
-                        match stt(&input.path, &whisper_model, audio_transcription_engine.clone(), &mut *vad_engine, deepgram_api_key.clone(), is_output_device) {
+                        match stt(&input.path, &whisper_model, audio_transcription_engine.clone(), &mut *vad_engine, deepgram_api_key.clone()) {
                             Ok(transcription) => TranscriptionResult {
                                 input: input.clone(),
                                 transcription: Some(transcription),
