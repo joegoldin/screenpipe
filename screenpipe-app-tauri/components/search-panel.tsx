@@ -52,7 +52,7 @@ export default function Search() {
   const [startDate, setStartDate] = useState<Date>(
     new Date(Date.now() - 24 * 3600000)
   );
-  const [endDate, setEndDate] = useState<Date>(new Date());
+  const [endDate, setEndDate] = useState<Date>(new Date(Date.now() + 24 * 3600000));
   const [includeFrames, setIncludeFrames] = useState(false);
   const [limit, setLimit] = useState(50);
   const [appName, setAppName] = useState("");
