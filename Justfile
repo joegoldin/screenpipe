@@ -16,4 +16,4 @@ build-tauri:
     cd screenpipe-app-tauri && bun scripts/pre_build.js && bun tauri build
 
 dev-tauri: build
-    cd screenpipe-app-tauri && bun scripts/pre_build.js && bun tauri dev
+    cd screenpipe-app-tauri && bun install && bun scripts/pre_build.js && bun tauri dev
