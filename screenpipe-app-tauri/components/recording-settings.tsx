@@ -96,6 +96,13 @@ export function RecordingSettings({
         }
         const monitors: MonitorDevice[] = await monitorsResponse.json();
         console.log("monitors", monitors);
+        var monitorIds = localSettings.monitorIds;
+        for (const monitor of monitors) {
+          if (!monitorIds.includes(monitor.id)) {
+            monitorIds = monitorIds.filter((id) => id !== monitor.id);
+          }
+        }
+        setLocalSettings({ ...localSettings, monitorIds: monitorIds });
         setAvailableMonitors(monitors);
 
         // Fetch audio devices
