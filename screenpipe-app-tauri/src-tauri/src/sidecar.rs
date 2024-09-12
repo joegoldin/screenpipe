@@ -204,6 +204,10 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Result<CommandChild, String> {
                 if id_str != "default" {
                     monitor_id_strings.push(id_str);
                 }
+            } else if let Some(id_str) = id.as_str() {
+                if id_str != "default" {
+                    monitor_id_strings.push(id_str.to_string());
+                }
             }
         }
     }
