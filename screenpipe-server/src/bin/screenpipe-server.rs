@@ -282,7 +282,7 @@ async fn main() -> anyhow::Result<()> {
     let vision_control_clone = Arc::clone(&vision_control);
     let shutdown_tx_clone = shutdown_tx.clone();
     let friend_wearable_uid_clone: Option<String> = friend_wearable_uid.clone(); // Clone here
-    let monitor_ids_clone = monitor_ids.clone();
+    let monitor_ids_clone = cli.monitor_id.clone();
     let ignored_windows_clone = cli.ignored_windows.clone();
     let included_windows_clone = cli.included_windows.clone();
 
@@ -321,7 +321,7 @@ async fn main() -> anyhow::Result<()> {
                     Arc::new(cli.audio_transcription_engine.clone().into()),
                     Arc::new(cli.ocr_engine.clone().into()),
                     friend_wearable_uid_clone.clone(),
-                    monitor_ids.clone(),
+                    cli.monitor_id.clone(),
                     cli.use_pii_removal,
                     cli.disable_vision,
                     vad_engine_clone,
@@ -420,7 +420,7 @@ async fn main() -> anyhow::Result<()> {
     );
     println!(
         "│ Monitor IDs         │ {:<34} │",
-        format_cell(&format!("{:?}", cli.monitor_id), VALUE_WIDTH)
+        format_cell(&format!("{:?}", monitor_ids_clone.clone()), VALUE_WIDTH)
     );
     println!(
         "│ Data Directory      │ {:<34} │",
