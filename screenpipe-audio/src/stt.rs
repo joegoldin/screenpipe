@@ -541,21 +541,27 @@ pub fn stt(
         pcm_data = resample(pcm_data, sample_rate, m::SAMPLE_RATE as u32)?;
     }
 
+    let is_output_device: bool = file_path.contains("output");
+
     // Filter out non-speech segments using Silero VAD
     debug!("Filtering out non-speech segments with VAD");
     let frame_size = 160; // 10ms frame size for 16kHz audio
     let mut speech_frames = Vec::new();
     for (frame_index, chunk) in pcm_data.chunks(frame_size).enumerate() {
-        match vad_engine.is_voice_segment(chunk) {
-            Ok(is_voice) => {
-                if is_voice {
-                    speech_frames.extend_from_slice(chunk);
+        if is_output_device {
+            speech_frames.extend_from_slice(chunk);
+        } else {
+            match vad_engine.is_voice_segment(chunk) {
+                Ok(is_voice) => {
+                    if is_voice {
+                        speech_frames.extend_from_slice(chunk);
+                    }
                 }
-            }
-            Err(e) => {
-                debug!("VAD failed for frame {}: {:?}", frame_index, e);
-                // Optionally, you can choose to include the frame if VAD fails
-                // speech_frames.extend_from_slice(chunk);
+                Err(e) => {
+                    debug!("VAD failed for frame {}: {:?}", frame_index, e);
+                    // Optionally, you can choose to include the frame if VAD fails
+                    // speech_frames.extend_from_slice(chunk);
+                }
             }
         }
     }
@@ -767,7 +773,7 @@ pub async fn create_whisper_channel(
                         #[cfg(target_os = "macos")]
                         {
                             autoreleasepool(|| {
-                                match stt(&input.path, &whisper_model, audio_transcription_engine.clone(), &mut *vad_engine, deepgram_api_key.clone()) {
+                                match stt(&input.path, &whisper_model, audio_transcription_engine.clone(), &mut *vad_engine, deepgram_api_key.clone(), is_output_device) {
                                     Ok(transcription) => TranscriptionResult {
                                         input: input.clone(),
                                         transcription: Some(transcription),
@@ -791,7 +797,7 @@ pub async fn create_whisper_channel(
                             unreachable!("This code should not be reached on non-macOS platforms")
                         }
                     } else {
-                        match stt(&input.path, &whisper_model, audio_transcription_engine.clone(), &mut *vad_engine, deepgram_api_key.clone()) {
+                        match stt(&input.path, &whisper_model, audio_transcription_engine.clone(), &mut *vad_engine, deepgram_api_key.clone(), is_output_device) {
                             Ok(transcription) => TranscriptionResult {
                                 input: input.clone(),
                                 transcription: Some(transcription),
