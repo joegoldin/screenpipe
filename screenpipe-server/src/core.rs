@@ -1,3 +1,4 @@
+use crate::cli::CliVadEngine;
 use crate::{DatabaseManager, VideoCapture};
 use anyhow::Result;
 use chrono::Utc;
@@ -7,6 +8,7 @@ use log::{debug, error, info, warn};
 use screenpipe_audio::{
     create_whisper_channel, record_and_transcribe, AudioDevice, AudioInput,
     AudioTranscriptionEngine, DeviceControl, TranscriptionResult,
+    vad_engine::VadEngineEnum,
 };
 use screenpipe_core::pii_removal::remove_pii;
 use screenpipe_integrations::friend_wearable::initialize_friend_wearable_loop;
@@ -25,6 +27,7 @@ pub async fn start_continuous_recording(
     output_path: Arc<String>,
     fps: f64,
     audio_chunk_duration: Duration,
+    video_chunk_duration: Duration,
     vision_control: Arc<AtomicBool>,
     audio_devices_control: Arc<SegQueue<(AudioDevice, DeviceControl)>>,
     audio_disabled: bool,
@@ -35,6 +38,7 @@ pub async fn start_continuous_recording(
     monitor_ids: Vec<u32>,
     use_pii_removal: bool,
     vision_disabled: bool,
+    vad_engine: CliVadEngine,
     vision_handle: &Handle,
     audio_handle: &Handle,
     ignored_windows: &[String],
@@ -55,7 +59,7 @@ pub async fn start_continuous_recording(
             Arc::new(AtomicBool::new(false)),
         )
     } else {
-        create_whisper_channel(audio_transcription_engine.clone(), deepgram_api_key).await?
+        create_whisper_channel(audio_transcription_engine.clone(), VadEngineEnum::from(vad_engine), deepgram_api_key).await?
     };
     let whisper_sender_clone = whisper_sender.clone();
     let db_manager_audio = Arc::clone(&db);
@@ -68,6 +72,7 @@ pub async fn start_continuous_recording(
         ));
     }
 
+    debug!("Starting video recording for monitor {:?}", monitor_ids);
     let video_tasks = if !vision_disabled {
         monitor_ids
             .iter()
@@ -80,6 +85,7 @@ pub async fn start_continuous_recording(
                 let ignored_windows_video = ignored_windows.to_vec();
                 let include_windows_video = include_windows.to_vec();
 
+                debug!("Starting video recording for monitor {}", monitor_id);
                 vision_handle.spawn(async move {
                     record_video(
                         db_manager_video,
@@ -93,6 +99,7 @@ pub async fn start_continuous_recording(
                         use_pii_removal,
                         &ignored_windows_video,
                         &include_windows_video,
+                        video_chunk_duration,
                     )
                     .await
                 })
@@ -163,6 +170,7 @@ async fn record_video(
     use_pii_removal: bool,
     ignored_windows: &[String],
     include_windows: &[String],
+    video_chunk_duration: Duration,
 ) -> Result<()> {
     debug!("record_video: Starting");
     let db_chunk_callback = Arc::clone(&db);
@@ -181,6 +189,7 @@ async fn record_video(
     let video_capture = VideoCapture::new(
         &output_path,
         fps,
+        video_chunk_duration,
         new_chunk_callback,
         save_text_files,
         Arc::clone(&ocr_engine),

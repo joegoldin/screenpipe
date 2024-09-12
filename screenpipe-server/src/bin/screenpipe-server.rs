@@ -266,6 +266,8 @@ async fn main() -> anyhow::Result<()> {
 
     let ocr_engine_clone = cli.ocr_engine.clone();
     let restart_interval = cli.restart_interval;
+    let vad_engine = cli.vad_engine.clone();
+    let vad_engine_clone = vad_engine.clone();
 
     let (shutdown_tx, _) = broadcast::channel::<()>(1);
 
@@ -279,12 +281,10 @@ async fn main() -> anyhow::Result<()> {
     let output_path_clone = Arc::new(local_data_dir.join("data").to_string_lossy().into_owned());
     let vision_control_clone = Arc::clone(&vision_control);
     let shutdown_tx_clone = shutdown_tx.clone();
-    let friend_wearable_uid_clone = friend_wearable_uid.clone(); // Clone here
-    let monitor_ids = if cli.monitor_id.is_empty() {
-        all_monitors.iter().map(|m| m.id()).collect::<Vec<_>>()
-    } else {
-        cli.monitor_id.clone()
-    };
+    let friend_wearable_uid_clone: Option<String> = friend_wearable_uid.clone(); // Clone here
+    let monitor_ids_clone = monitor_ids.clone();
+    let ignored_windows_clone = cli.ignored_windows.clone();
+    let included_windows_clone = cli.included_windows.clone();
 
     let fps = if cli.fps.is_finite() && cli.fps > 0.0 {
         cli.fps
@@ -306,12 +306,14 @@ async fn main() -> anyhow::Result<()> {
             };
 
             loop {
+                let vad_engine_clone = vad_engine.clone(); // Clone it here for each iteration
                 let mut shutdown_rx = shutdown_tx_clone.subscribe();
                 let recording_future = start_continuous_recording(
                     db_clone.clone(),
                     output_path_clone.clone(),
                     fps,
                     Duration::from_secs(cli.audio_chunk_duration),
+                    Duration::from_secs(cli.video_chunk_duration),
                     vision_control_clone.clone(),
                     audio_devices_control.clone(),
                     cli.disable_audio,
@@ -322,6 +324,7 @@ async fn main() -> anyhow::Result<()> {
                     monitor_ids.clone(),
                     cli.use_pii_removal,
                     cli.disable_vision,
+                    vad_engine_clone,
                     &vision_handle,
                     &audio_handle,
                     &cli.ignored_windows,
@@ -394,6 +397,10 @@ async fn main() -> anyhow::Result<()> {
         "│ Audio Chunk Duration│ {:<34} │",
         format!("{} seconds", cli.audio_chunk_duration)
     );
+    println!(
+        "│ Video Chunk Duration│ {:<34} │",
+        format!("{} seconds", cli.video_chunk_duration)
+    );
     println!("│ Port                │ {:<34} │", cli.port);
     println!("│ Audio Disabled      │ {:<34} │", cli.disable_audio);
     println!("│ Vision Disabled     │ {:<34} │", cli.disable_vision);
@@ -406,6 +413,10 @@ async fn main() -> anyhow::Result<()> {
     println!(
         "│ OCR Engine          │ {:<34} │",
         format!("{:?}", ocr_engine_clone)
+    );
+    println!(
+        "│ VAD Engine          │ {:<34} │",
+        format!("{:?}", vad_engine_clone)
     );
     println!(
         "│ Monitor IDs         │ {:<34} │",
@@ -423,6 +434,19 @@ async fn main() -> anyhow::Result<()> {
         } else {
             "Disabled".to_string()
         }
+    );
+    println!("│ Use PII Removal     │ {:<34} │", cli.use_pii_removal);
+    println!(
+        "│ Ignored Windows     │ {:<34} │",
+        format_cell(&format!("{:?}", &ignored_windows_clone), VALUE_WIDTH)
+    );
+    println!(
+        "│ Included Windows    │ {:<34} │",
+        format_cell(&format!("{:?}", &included_windows_clone), VALUE_WIDTH)
+    );
+    println!(
+        "│ Friend Wearable UID │ {:<34} │",
+        cli.friend_wearable_uid.as_deref().unwrap_or("Not set")
     );
     const VALUE_WIDTH: usize = 34;
 
