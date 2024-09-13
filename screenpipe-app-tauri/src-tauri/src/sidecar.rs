@@ -171,6 +171,14 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Result<CommandChild, String> {
     .map_err(|e| e.to_string())?
     .unwrap_or(String::from("default"));
 
+    let deepgram_api_key = with_store(app.clone(), stores.clone(), path.clone(), |store| {
+        Ok(store
+            .get("deepgramApiKey")
+            .and_then(|v| v.as_str().map(String::from)))
+    })
+    .map_err(|e| e.to_string())?
+    .unwrap_or(String::from("default"));
+
     let port_str = port.to_string();
     let mut args = vec!["--port", port_str.as_str()];
     if cfg!(target_os = "macos") {

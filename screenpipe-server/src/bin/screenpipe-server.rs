@@ -26,12 +26,7 @@ use screenpipe_server::{
 };
 use screenpipe_vision::monitor::list_monitors;
 use serde_json::{json, Value};
-use tokio::{
-    runtime::Runtime,
-    signal,
-    sync::{broadcast, mpsc::channel},
-    time::{interval_at, Instant},
-};
+use tokio::{runtime::Runtime, signal, sync::broadcast};
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -229,14 +224,7 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let (restart_sender, _restart_receiver) = channel(10);
-    let resource_monitor = ResourceMonitor::new(
-        cli.self_healing,
-        Duration::from_secs(60),
-        3,
-        restart_sender, // TODO: remove self healing its dead code atm
-        cli.port,
-    );
+    let resource_monitor = ResourceMonitor::new();
     resource_monitor.start_monitoring(Duration::from_secs(10));
 
     let db = Arc::new(
@@ -265,7 +253,6 @@ async fn main() -> anyhow::Result<()> {
     let warning_audio_transcription_engine_clone = cli.audio_transcription_engine.clone();
 
     let ocr_engine_clone = cli.ocr_engine.clone();
-    let restart_interval = cli.restart_interval;
     let vad_engine = cli.vad_engine.clone();
     let vad_engine_clone = vad_engine.clone();
 
@@ -282,7 +269,7 @@ async fn main() -> anyhow::Result<()> {
     let vision_control_clone = Arc::clone(&vision_control);
     let shutdown_tx_clone = shutdown_tx.clone();
     let friend_wearable_uid_clone: Option<String> = friend_wearable_uid.clone(); // Clone here
-    let monitor_ids_clone = cli.monitor_id.clone();
+    let monitor_ids_clone = monitor_ids.clone();
     let ignored_windows_clone = cli.ignored_windows.clone();
     let included_windows_clone = cli.included_windows.clone();
 
@@ -296,15 +283,6 @@ async fn main() -> anyhow::Result<()> {
     let handle = {
         let runtime = &tokio::runtime::Handle::current();
         runtime.spawn(async move {
-            let mut interval = if restart_interval > 0 {
-                Some(interval_at(
-                    Instant::now() + Duration::from_secs(restart_interval * 60),
-                    Duration::from_secs(restart_interval * 60),
-                ))
-            } else {
-                None
-            };
-
             loop {
                 let vad_engine_clone = vad_engine.clone(); // Clone it here for each iteration
                 let mut shutdown_rx = shutdown_tx_clone.subscribe();
@@ -338,18 +316,10 @@ async fn main() -> anyhow::Result<()> {
                         info!("Received shutdown signal for recording");
                         break;
                     }
-                    _ = async { if let Some(ref mut interval) = interval { interval.tick().await } else { std::future::pending().await } } => {
-                        info!("Restarting recording due to restart interval");
-                        continue;
-                    }
                 };
 
                 if let Err(e) = result {
                     error!("Continuous recording error: {:?}", e);
-                }
-
-                if interval.is_none() {
-                    break;
                 }
             }
 
@@ -367,7 +337,7 @@ async fn main() -> anyhow::Result<()> {
     };
     let server = Server::new(
         db_server,
-        SocketAddr::from(([0, 0, 0, 0], cli.port)),
+        SocketAddr::from(([127, 0, 0, 1], cli.port)),
         vision_control_server_clone,
         audio_devices_control_server,
         local_data_dir_clone_2,
@@ -404,7 +374,6 @@ async fn main() -> anyhow::Result<()> {
     println!("│ Port                │ {:<34} │", cli.port);
     println!("│ Audio Disabled      │ {:<34} │", cli.disable_audio);
     println!("│ Vision Disabled     │ {:<34} │", cli.disable_vision);
-    println!("│ Self Healing        │ {:<34} │", cli.self_healing);
     println!("│ Save Text Files     │ {:<34} │", cli.save_text_files);
     println!(
         "│ Audio Engine        │ {:<34} │",
@@ -427,13 +396,19 @@ async fn main() -> anyhow::Result<()> {
         local_data_dir_clone.display()
     );
     println!("│ Debug Mode          │ {:<34} │", cli.debug);
+
+    println!("│ Use PII Removal     │ {:<34} │", cli.use_pii_removal);
     println!(
-        "│ Restart Interval    │ {:<34} │",
-        if cli.restart_interval > 0 {
-            format!("Every {} minutes", cli.restart_interval)
-        } else {
-            "Disabled".to_string()
-        }
+        "│ Ignored Windows     │ {:<34} │",
+        format_cell(&format!("{:?}", &ignored_windows_clone), VALUE_WIDTH)
+    );
+    println!(
+        "│ Included Windows    │ {:<34} │",
+        format_cell(&format!("{:?}", &included_windows_clone), VALUE_WIDTH)
+    );
+    println!(
+        "│ Friend Wearable UID │ {:<34} │",
+        cli.friend_wearable_uid.as_deref().unwrap_or("Not set")
     );
     println!("│ Use PII Removal     │ {:<34} │", cli.use_pii_removal);
     println!(

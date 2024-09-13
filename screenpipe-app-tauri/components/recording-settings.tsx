@@ -125,9 +125,9 @@ export function RecordingSettings({
         ) {
           setLocalSettings({
             ...localSettings,
-            monitorIds: monitors
-              .filter((monitor) => monitor.is_default)
-              .map((monitor) => monitor.id),
+            monitorIds: [
+              monitors.find((monitor) => monitor.is_default)!.id!.toString(),
+            ],
           });
         }
         if (
@@ -237,21 +237,10 @@ export function RecordingSettings({
     setLocalSettings({ ...localSettings, ocrEngine: value });
   };
 
-  const handleMonitorChange = (value: string) => {
-    let updatedMonitors: string[];
-
-    if (localSettings.monitorIds.includes(value)) {
-      // If the monitor is already selected, try to remove it
-      updatedMonitors = localSettings.monitorIds.filter(id => id !== value);
-    } else {
-      // If the monitor is not selected, add it
-      updatedMonitors = [...localSettings.monitorIds, value];
-    }
-
-    // If no monitors are selected, keep the current selection
-    if (updatedMonitors.length === 0) {
-      updatedMonitors = localSettings.monitorIds;
-    }
+  const handleMonitorChange = (currentValue: string) => {
+    const updatedMonitors = localSettings.monitorIds.includes(currentValue)
+      ? localSettings.monitorIds.filter((id) => id !== currentValue)
+      : [...localSettings.monitorIds, currentValue];
 
     setLocalSettings({ ...localSettings, monitorIds: updatedMonitors });
   };
