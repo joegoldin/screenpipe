@@ -85,7 +85,7 @@ async fn main() -> Result<()> {
     let (whisper_sender, mut whisper_receiver, _) = create_whisper_channel(
         Arc::new(AudioTranscriptionEngine::WhisperDistilLargeV3),
         VadEngineEnum::Silero, // Or VadEngineEnum::WebRtc, hardcoded for now
-        args.deepgram_api_key,
+        deepgram_api_key.clone(),
         &PathBuf::from("output.mp4"),
     )
     .await?;

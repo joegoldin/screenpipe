@@ -543,29 +543,29 @@ pub fn stt(
         audio_data = resample(audio_data, audio_input.sample_rate, m::SAMPLE_RATE as u32)?;
     }
 
-    let is_output_device: bool = output_path.contains("output");
+    let is_output_device: bool = output_path.to_str().unwrap_or("").contains("output");
 
     // Filter out non-speech segments using Silero VAD
     debug!("Filtering out non-speech segments with VAD");
     let frame_size = 160; // 10ms frame size for 16kHz audio
     let mut speech_frames = Vec::new();
     for (frame_index, chunk) in audio_data.chunks(frame_size).enumerate() {
-        if is_output_device {
-            speech_frames.extend_from_slice(chunk);
-        } else {
-            match vad_engine.is_voice_segment(chunk) {
-                Ok(is_voice) => {
-                    if is_voice {
-                        speech_frames.extend_from_slice(chunk);
-                    }
-                }
-                Err(e) => {
-                    debug!("VAD failed for frame {}: {:?}", frame_index, e);
-                    // Optionally, you can choose to include the frame if VAD fails
-                    // speech_frames.extend_from_slice(chunk);
-                }
-            }
-        }
+        // if is_output_device {
+        speech_frames.extend_from_slice(chunk);
+        // } else {
+        //     match vad_engine.is_voice_segment(chunk) {
+        //         Ok(is_voice) => {
+        //             if is_voice {
+        //                 speech_frames.extend_from_slice(chunk);
+        //             }
+        //         }
+        //         Err(e) => {
+        //             debug!("VAD failed for frame {}: {:?}", frame_index, e);
+        //             // Optionally, you can choose to include the frame if VAD fails
+        //             // speech_frames.extend_from_slice(chunk);
+        //         }
+        //     }
+        // }
     }
 
     info!(

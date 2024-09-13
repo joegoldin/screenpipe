@@ -269,7 +269,7 @@ async fn main() -> anyhow::Result<()> {
     let vision_control_clone = Arc::clone(&vision_control);
     let shutdown_tx_clone = shutdown_tx.clone();
     let friend_wearable_uid_clone: Option<String> = friend_wearable_uid.clone(); // Clone here
-    let monitor_ids_clone = monitor_ids.clone();
+    let monitor_ids_clone = cli.monitor_id.clone();
     let ignored_windows_clone = cli.ignored_windows.clone();
     let included_windows_clone = cli.included_windows.clone();
 
