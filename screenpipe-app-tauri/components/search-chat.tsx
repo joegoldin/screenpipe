@@ -70,7 +70,7 @@ export function SearchChat() {
   const [startDate, setStartDate] = useState<Date>(
     new Date(Date.now() - 24 * 3600000)
   );
-  const [endDate, setEndDate] = useState<Date>(new Date());
+  const [endDate, setEndDate] = useState<Date>(new Date(Date.now() + 24 * 3600000));
   const [includeFrames, setIncludeFrames] = useState(false);
   const [limit, setLimit] = useState(30);
   const [appName, setAppName] = useState("");
@@ -80,7 +80,7 @@ export function SearchChat() {
   const [totalResults, setTotalResults] = useState(0);
   const { settings } = useSettings();
   const [isAiLoading, setIsAiLoading] = useState(false);
-  const [minLength, setMinLength] = useState(100);
+  const [minLength, setMinLength] = useState(10);
   const [maxLength, setMaxLength] = useState(10000);
 
   // Chat state
