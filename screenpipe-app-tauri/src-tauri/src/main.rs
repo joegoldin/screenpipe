@@ -270,6 +270,14 @@ async fn main() {
                     }
                 }
 
+                if store.has("monitorIds") {
+                    store.delete("monitorIds")?;
+                    store.save()?;
+                    debug!("Deleted monitorIds from store");
+                } else {
+                    debug!("monitorIds not found in store");
+                }
+
                 Ok(())
             });
 
