@@ -52,6 +52,8 @@ impl From<CliOcrEngine> for CoreOcrEngine {
 }
 #[derive(Clone, Debug, ValueEnum, PartialEq)]
 pub enum CliVadEngine {
+    #[clap(name = "disabled")]
+    Disabled,
     #[clap(name = "webrtc")]
     WebRtc,
     #[clap(name = "silero")]
@@ -61,6 +63,7 @@ pub enum CliVadEngine {
 impl From<CliVadEngine> for VadEngineEnum {
     fn from(cli_engine: CliVadEngine) -> Self {
         match cli_engine {
+            CliVadEngine::Disabled => VadEngineEnum::Disabled,
             CliVadEngine::WebRtc => VadEngineEnum::WebRtc,
             CliVadEngine::Silero => VadEngineEnum::Silero,
         }
@@ -186,6 +189,10 @@ pub struct Cli {
     /// Deepgram API Key for audio transcription
     #[arg(long = "deepgram-api-key")]
     pub deepgram_api_key: Option<String>,
+
+    /// Audio amplification factor (0.1 to 5.0)
+    #[arg(long, default_value_t = 1.0)]
+    pub amplification: f32,
 
     #[command(subcommand)]
     pub command: Option<Command>,

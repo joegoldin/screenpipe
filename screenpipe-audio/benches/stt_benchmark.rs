@@ -25,6 +25,8 @@ fn criterion_benchmark(c: &mut Criterion) {
                 black_box(audio_transcription_engine.clone()),
                 black_box(VadEngineEnum::Silero),
                 None,
+                black_box(&PathBuf::from("output.mp4")),
+                black_box(1.0),
             );
         })
     });

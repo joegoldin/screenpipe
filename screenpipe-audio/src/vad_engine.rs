@@ -1,16 +1,44 @@
 use anyhow;
 use log::debug;
+use std::any::Any;
 use std::io::Write;
 use std::path::PathBuf;
 use vad_rs::Vad;
 
 pub enum VadEngineEnum {
+    Disabled,
     WebRtc,
     Silero,
 }
 
-pub trait VadEngine {
+pub trait VadEngine: Any {
     fn is_voice_segment(&mut self, audio_chunk: &[f32]) -> anyhow::Result<bool>;
+    
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+}
+
+pub struct DisabledVad;
+
+impl DisabledVad {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl VadEngine for DisabledVad {
+    fn is_voice_segment(&mut self, _audio_chunk: &[f32]) -> anyhow::Result<bool> {
+        // Always return true, treating all audio as voice segments
+        Ok(true)
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 pub struct WebRtcVad(webrtc_vad::Vad);
@@ -36,6 +64,14 @@ impl VadEngine for WebRtcVad {
         // debug!("WebRTC VAD result: is_voice_segment = {}", result);
 
         Ok(result)
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -92,10 +128,19 @@ impl VadEngine for SileroVad {
 
         Ok(false)
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 pub fn create_vad_engine(engine: VadEngineEnum) -> anyhow::Result<Box<dyn VadEngine>> {
     match engine {
+        VadEngineEnum::Disabled => Ok(Box::new(DisabledVad::new())),
         VadEngineEnum::WebRtc => Ok(Box::new(WebRtcVad::new())),
         VadEngineEnum::Silero => {
             let silero_vad = SileroVad::new()?;
@@ -104,5 +149,6 @@ pub fn create_vad_engine(engine: VadEngineEnum) -> anyhow::Result<Box<dyn VadEng
     }
 }
 
+unsafe impl Send for DisabledVad {}
 unsafe impl Send for WebRtcVad {}
 unsafe impl Send for SileroVad {}

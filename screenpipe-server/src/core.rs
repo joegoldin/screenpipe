@@ -42,6 +42,7 @@ pub async fn start_continuous_recording(
     ignored_windows: &[String],
     include_windows: &[String],
     deepgram_api_key: Option<String>,
+    audio_amplification_factor: f32,
 ) -> Result<()> {
     let (whisper_sender, whisper_receiver, whisper_shutdown_flag) = if audio_disabled {
         // Create a dummy channel if no audio devices are available, e.g. audio disabled
@@ -62,6 +63,7 @@ pub async fn start_continuous_recording(
             VadEngineEnum::from(vad_engine),
             deepgram_api_key,
             &PathBuf::from(output_path.as_ref()),
+            audio_amplification_factor,
         )
         .await?
     };

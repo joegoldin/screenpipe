@@ -32,7 +32,6 @@ mod tests {
         let result = record_and_transcribe(
             Arc::new(virtual_device.clone()),
             duration,
-            output_path.clone(),
             tx,
             is_running.clone(),
         )
