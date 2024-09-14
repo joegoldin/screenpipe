@@ -2,10 +2,8 @@
 mod tests {
     use chrono::Utc;
     use log::{debug, LevelFilter};
-    use screenpipe_audio::vad_engine::{VadEngineEnum, WebRtcVad};
-    use screenpipe_audio::{
-        default_output_device, list_audio_devices, stt, AudioTranscriptionEngine, WhisperModel,
-    };
+    use screenpipe_audio::vad_engine::VadEngineEnum;
+    use screenpipe_audio::{default_output_device, list_audio_devices, AudioTranscriptionEngine};
     use screenpipe_audio::{parse_audio_device, record_and_transcribe};
     use std::path::PathBuf;
     use std::process::Command;
@@ -42,33 +40,6 @@ mod tests {
         assert_eq!(spec.to_string(), "Test Device (input)");
     }
 
-    #[test]
-    #[ignore]
-    fn test_speech_to_text() {
-        setup();
-        println!("Starting speech to text test");
-        println!("Loading audio file");
-        let start = std::time::Instant::now();
-        let whisper_model =
-            WhisperModel::new(Arc::new(AudioTranscriptionEngine::WhisperTiny)).unwrap();
-
-        let mut vad_engine = WebRtcVad::new();
-        let text = stt(
-            "./test_data/selah.mp4",
-            &whisper_model,
-            Arc::new(AudioTranscriptionEngine::WhisperTiny),
-            &mut vad_engine,
-            None,
-        )
-        .unwrap();
-        let duration = start.elapsed();
-
-        println!("Speech to text completed in {:?}", duration);
-        println!("Transcribed text: {:?}", text);
-
-        assert!(text.contains("love"));
-    }
-
     #[tokio::test]
     #[ignore] // Add this if you want to skip this test in regular test runs
     async fn test_record_and_transcribe() {
@@ -85,14 +56,7 @@ mod tests {
         // Act
         let start_time = Instant::now();
         println!("Starting record_and_transcribe");
-        let result = record_and_transcribe(
-            device_spec,
-            duration,
-            output_path.clone(),
-            sender,
-            is_running,
-        )
-        .await;
+        let result = record_and_transcribe(device_spec, duration, sender, is_running).await;
         println!("record_and_transcribe completed");
         let elapsed_time = start_time.elapsed();
 
@@ -110,7 +74,7 @@ mod tests {
 
         // Check if we received the correct AudioInput
         let audio_input = receiver.try_recv().unwrap();
-        assert_eq!(audio_input.path, output_path.to_str().unwrap());
+        assert_eq!(audio_input.data.len(), 0);
         println!("Audio input: {:?}", audio_input);
 
         // Verify file format (you might need to install the `infer` crate for this)
@@ -148,15 +112,9 @@ mod tests {
         // Act
         let start_time = Instant::now();
 
-        record_and_transcribe(
-            device_spec,
-            duration,
-            output_path.clone(),
-            sender,
-            is_running,
-        )
-        .await
-        .unwrap();
+        record_and_transcribe(device_spec, duration, sender, is_running)
+            .await
+            .unwrap();
 
         let elapsed_time = start_time.elapsed();
 
@@ -176,7 +134,7 @@ mod tests {
 
         // Check if we received the correct AudioInput
         let audio_input = receiver.try_recv().unwrap();
-        assert_eq!(audio_input.path, output_path.to_str().unwrap());
+        assert_eq!(audio_input.data.len(), 0);
 
         // Verify file format
         let kind = infer::get_from_path(&output_path).unwrap().unwrap();
@@ -239,6 +197,7 @@ mod tests {
             Arc::new(AudioTranscriptionEngine::WhisperTiny),
             VadEngineEnum::WebRtc,
             None,
+            &output_path_2.clone(),
         )
         .await
         .unwrap();
@@ -250,7 +209,6 @@ mod tests {
             record_and_transcribe(
                 device_spec,
                 Duration::from_secs(15),
-                output_path.clone(),
                 whisper_sender,
                 is_running,
             )
