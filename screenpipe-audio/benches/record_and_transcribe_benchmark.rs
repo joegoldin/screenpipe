@@ -22,8 +22,6 @@ async fn setup_test() -> (
         Arc::new(AudioTranscriptionEngine::WhisperDistilLargeV3),
         screenpipe_audio::VadEngineEnum::Silero,
         None,
-        &PathBuf::from("output.mp4"),
-        1.0,
     )
     .await
     .unwrap();

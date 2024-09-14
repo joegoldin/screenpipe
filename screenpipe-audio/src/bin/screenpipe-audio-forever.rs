@@ -87,7 +87,6 @@ async fn main() -> Result<()> {
         VadEngineEnum::Silero, // Or VadEngineEnum::WebRtc, hardcoded for now
         deepgram_api_key.clone(),
         &PathBuf::from("output.mp4"),
-        1.0,
     )
     .await?;
     // Spawn threads for each device

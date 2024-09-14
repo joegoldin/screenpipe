@@ -89,7 +89,6 @@ async fn main() -> Result<()> {
         VadEngineEnum::WebRtc, // Or VadEngineEnum::WebRtc, hardcoded for now
         deepgram_api_key,
         &output_path,
-        1.0,
     )
     .await?;
     // Spawn threads for each device

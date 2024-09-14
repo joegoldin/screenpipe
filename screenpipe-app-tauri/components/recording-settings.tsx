@@ -8,7 +8,6 @@ import {
   SelectValue,
 } from "./ui/select";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import {
   Check,
@@ -172,8 +171,6 @@ export function RecordingSettings({
         ignoredWindows: localSettings.ignoredWindows,
         includedWindows: localSettings.includedWindows,
         deepgramApiKey: localSettings.deepgramApiKey,
-        amplification: localSettings.amplification,
-        vadEnabled: localSettings.vadEnabled,
       };
       console.log("Settings to update:", settingsToUpdate);
       await updateSettings(settingsToUpdate);
@@ -269,15 +266,6 @@ export function RecordingSettings({
 
   const handleDisableAudioChange = (checked: boolean) => {
     setLocalSettings({ ...localSettings, disableAudio: checked });
-  };
-
-  const handleAmplificationChange = (value: number[]) => {
-    const newValue = value[0];
-    setLocalSettings({ ...localSettings, amplification: Number(newValue) });
-  };
-
-  const handleVadEnabledChange = (checked: boolean) => {
-    setLocalSettings({ ...localSettings, vadEnabled: checked });
   };
 
   return (
@@ -727,49 +715,6 @@ export function RecordingSettings({
                 </Button>
               </div>
             </div>
-
-            <div className="flex flex-col space-y-4">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="vadEnabled" className="flex items-center space-x-2">
-                  <span>Voice Activity Detection</span>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <HelpCircle className="h-4 w-4" />
-                      </TooltipTrigger>
-                      <TooltipContent side="right">
-                        <p>Automatically detect and only process audio when speech is present</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </Label>
-                <Switch
-                  id="vadEnabled"
-                  checked={localSettings.vadEnabled}
-                  onCheckedChange={handleVadEnabledChange}
-                />
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <Label htmlFor="amplification">Amplification</Label>
-                  <span className="text-sm text-muted-foreground">
-                    {localSettings.amplification.toFixed(1)}
-                  </span>
-                </div>
-                <Slider
-                  id="amplification"
-                  min={1}
-                  max={5}
-                  step={0.1}
-                  value={[localSettings.amplification]}
-                  onValueChange={handleAmplificationChange}
-                />
-              </div>
-              <p className="text-sm text-muted-foreground text-center">
-                Adjust audio settings to improve voice detection and recording quality.
-              </p>
-            </div>
-
 
             <div className="flex flex-col space-y-2">
               <Button

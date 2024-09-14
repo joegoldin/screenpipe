@@ -171,21 +171,13 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Result<CommandChild, String> {
     .map_err(|e| e.to_string())?
     .unwrap_or(String::from("default"));
 
-    let amplification = with_store(app.clone(), stores.clone(), path.clone(), |store| {
+    let deepgram_api_key = with_store(app.clone(), stores.clone(), path.clone(), |store| {
         Ok(store
-            .get("amplification")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(1.0))
+            .get("deepgramApiKey")
+            .and_then(|v| v.as_str().map(String::from)))
     })
-    .map_err(|e| e.to_string())?;
-
-    let vad_enabled = with_store(app.clone(), stores.clone(), path.clone(), |store| {
-        Ok(store
-            .get("vadEnabled")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(true))
-    })
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| e.to_string())?
+    .unwrap_or(String::from("default"));
 
     let port_str = port.to_string();
     let mut args = vec!["--port", port_str.as_str()];
@@ -265,15 +257,6 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Result<CommandChild, String> {
             args.push("--included-windows");
             args.push(window);
         }
-    }
-
-    args.push("--amplification");
-    let amplification_value = amplification.to_string();
-    args.push(&amplification_value);
-
-    if !vad_enabled {
-        args.push("--vad-engine");
-        args.push("disabled");
     }
 
     args.push("--debug");

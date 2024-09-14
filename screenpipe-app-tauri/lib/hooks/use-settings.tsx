@@ -35,8 +35,6 @@ const defaultSettings: Settings = {
   ignoredWindows: [],
   includedWindows: [],
   aiUrl: "https://api.openai.com/v1",
-  amplification: 1.0,
-  vadEnabled: true,
 };
 
 export interface Settings {
@@ -62,8 +60,6 @@ export interface Settings {
   ignoredWindows: string[];
   includedWindows: string[];
   aiUrl: string;
-  amplification: number;
-  vadEnabled: boolean;
 }
 
 let store: Store | null = null;
@@ -125,7 +121,7 @@ export function useSettings() {
         let savedDevMode = (await store!.get("devMode")) as boolean;
 
         savedDevMode = savedDevMode === true;
-        let savedAudioTranscriptionEngine =
+        const savedAudioTranscriptionEngine =
           ((await store!.get("audioTranscriptionEngine")) as string) ||
           "whisper-large";
         const savedOcrEngine =
@@ -151,10 +147,6 @@ export function useSettings() {
         const savedAiUrl =
           ((await store!.get("aiUrl")) as string) ||
           "https://api.openai.com/v1";
-        const savedAmplification =
-          ((await store!.get("amplification")) as number) || 1.0;
-        const savedVadEnabled =
-          ((await store!.get("vadEnabled")) as boolean) || true;
         setSettings({
           openaiApiKey: savedKey,
           deepgramApiKey: savedDeepgramKey,
@@ -178,8 +170,6 @@ export function useSettings() {
           ignoredWindows: savedIgnoredWindows,
           includedWindows: savedIncludedWindows,
           aiUrl: savedAiUrl,
-          amplification: savedAmplification,
-          vadEnabled: savedVadEnabled,
         });
       } catch (error) {
         console.error("Failed to load settings:", error);

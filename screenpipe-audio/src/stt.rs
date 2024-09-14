@@ -26,7 +26,7 @@ use crate::{
     encode_single_audio,
     multilingual,
     pcm_decode::pcm_decode,
-    vad_engine::{SileroVad, VadEngine, VadEngineEnum, WebRtcVad, DisabledVad},
+    vad_engine::{SileroVad, VadEngine, VadEngineEnum, WebRtcVad},
     AudioTranscriptionEngine,
 };
 
@@ -512,20 +512,6 @@ fn transcribe_with_deepgram(api_key: &str, audio_data: &[f32]) -> Result<String>
     }
 }
 
-fn resample_audio(audio_input: &AudioInput, input_audio_data: Vec<f32>) -> Result<Vec<f32>> {
-    let mut audio_data = input_audio_data.clone();
-
-    if audio_input.sample_rate != m::SAMPLE_RATE as u32 {
-        info!(
-            "Resampling from {} Hz to {} Hz",
-            audio_input.sample_rate,
-            m::SAMPLE_RATE
-        );
-        audio_data = resample(audio_data, audio_input.sample_rate, m::SAMPLE_RATE as u32)?;
-    }
-    Ok(audio_data)
-}
-
 pub fn stt(
     audio_input: &AudioInput,
     whisper_model: &WhisperModel,
@@ -533,7 +519,6 @@ pub fn stt(
     vad_engine: &mut dyn VadEngine,
     deepgram_api_key: Option<String>,
     output_path: &PathBuf,
-    audio_amplification_factor: f32,
 ) -> Result<(String, String)> {
     let model = &whisper_model.model;
     let tokenizer = &whisper_model.tokenizer;
@@ -549,41 +534,38 @@ pub fn stt(
     <byteorder::LittleEndian as byteorder::ByteOrder>::read_f32_into(mel_bytes, &mut mel_filters);
 
     let mut audio_data = audio_input.data.clone();
-    let mut sample_rate_determined = audio_input.sample_rate.clone() as usize;
-    if let Some(_) = vad_engine.as_any().downcast_ref::<DisabledVad>() {
-        debug!("VAD is disabled");
-    } else if let Some(_) = vad_engine.as_any().downcast_ref::<WebRtcVad>() {
-        audio_data = resample_audio(audio_input, audio_data)?;
-        sample_rate_determined = m::SAMPLE_RATE;
-    } else if let Some(_) = vad_engine.as_any().downcast_ref::<SileroVad>() {
-        audio_data = resample_audio(audio_input, audio_data)?;
-        sample_rate_determined = m::SAMPLE_RATE;
+    if audio_input.sample_rate != m::SAMPLE_RATE as u32 {
+        info!(
+            "Resampling from {} Hz to {} Hz",
+            audio_input.sample_rate,
+            m::SAMPLE_RATE
+        );
+        audio_data = resample(audio_data, audio_input.sample_rate, m::SAMPLE_RATE as u32)?;
     }
 
-    // Amplify audio data
-    if audio_amplification_factor != 1.0 {
-        for sample in audio_data.iter_mut() {
-            *sample *= audio_amplification_factor;
-        }
-    }
+    let is_output_device: bool = output_path.to_str().unwrap_or("").contains("output");
 
     // Filter out non-speech segments using Silero VAD
     debug!("Filtering out non-speech segments with VAD");
-    let frame_size = sample_rate_determined / 100; // 10ms frame size for 16kHz audio = 160 samples
+    let frame_size = 160; // 10ms frame size for 16kHz audio
     let mut speech_frames = Vec::new();
     for (frame_index, chunk) in audio_data.chunks(frame_size).enumerate() {
-        match vad_engine.is_voice_segment(chunk) {
-            Ok(is_voice) => {
-                if is_voice {
-                    speech_frames.extend_from_slice(chunk);
-                }
-            }
-            Err(e) => {
-                debug!("VAD failed for frame {}: {:?}", frame_index, e);
-                // Optionally, you can choose to include the frame if VAD fails
-                // speech_frames.extend_from_slice(chunk);
-            }
-        }
+        // if is_output_device {
+        speech_frames.extend_from_slice(chunk);
+        // } else {
+        //     match vad_engine.is_voice_segment(chunk) {
+        //         Ok(is_voice) => {
+        //             if is_voice {
+        //                 speech_frames.extend_from_slice(chunk);
+        //             }
+        //         }
+        //         Err(e) => {
+        //             debug!("VAD failed for frame {}: {:?}", frame_index, e);
+        //             // Optionally, you can choose to include the frame if VAD fails
+        //             // speech_frames.extend_from_slice(chunk);
+        //         }
+        //     }
+        // }
     }
 
     info!(
@@ -779,7 +761,6 @@ pub async fn create_whisper_channel(
     vad_engine: VadEngineEnum,
     deepgram_api_key: Option<String>,
     output_path: &PathBuf,
-    audio_amplification_factor: f32,
 ) -> Result<(
     UnboundedSender<AudioInput>,
     UnboundedReceiver<TranscriptionResult>,
@@ -795,7 +776,6 @@ pub async fn create_whisper_channel(
         UnboundedReceiver<TranscriptionResult>,
     ) = unbounded_channel();
     let mut vad_engine: Box<dyn VadEngine + Send> = match vad_engine {
-        VadEngineEnum::Disabled => Box::new(DisabledVad::new()),
         VadEngineEnum::WebRtc => Box::new(WebRtcVad::new()),
         VadEngineEnum::Silero => Box::new(SileroVad::new()?),
     };
@@ -824,7 +804,7 @@ pub async fn create_whisper_channel(
                         #[cfg(target_os = "macos")]
                         {
                             autoreleasepool(|| {
-                                match stt(&input, &whisper_model, audio_transcription_engine.clone(), &mut *vad_engine, deepgram_api_key.clone(), &output_path, audio_amplification_factor) {
+                                match stt(&input, &whisper_model, audio_transcription_engine.clone(), &mut *vad_engine, deepgram_api_key.clone(), &output_path) {
                                     Ok((transcription, path)) => TranscriptionResult {
                                         input: input.clone(),
                                         transcription: Some(transcription),
@@ -850,7 +830,7 @@ pub async fn create_whisper_channel(
                             unreachable!("This code should not be reached on non-macOS platforms")
                         }
                     } else {
-                        match stt(&input, &whisper_model, audio_transcription_engine.clone(), &mut *vad_engine, deepgram_api_key.clone(), &output_path, audio_amplification_factor) {
+                        match stt(&input, &whisper_model, audio_transcription_engine.clone(), &mut *vad_engine, deepgram_api_key.clone(), &output_path) {
                             Ok((transcription, path)) => TranscriptionResult {
                                 input: input.clone(),
                                 transcription: Some(transcription),
