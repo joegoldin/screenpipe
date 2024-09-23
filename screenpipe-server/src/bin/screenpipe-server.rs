@@ -457,11 +457,11 @@ async fn main() -> anyhow::Result<()> {
 
     if cli.disable_vision {
         println!("│ {:<19} │ {:<34} │", "", "vision disabled");
-    } else if monitor_ids.is_empty() {
+    } else if monitor_ids_clone.is_empty() {
         println!("│ {:<19} │ {:<34} │", "", "no monitors available");
     } else {
-        let total_monitors = monitor_ids.len();
-        for (_, monitor) in monitor_ids.iter().enumerate().take(MAX_ITEMS_TO_DISPLAY) {
+        let total_monitors = monitor_ids_clone.len();
+        for (_, monitor) in monitor_ids_clone.iter().enumerate().take(MAX_ITEMS_TO_DISPLAY) {
             let monitor_str = format!("id: {}", monitor);
             let formatted_monitor = format_cell(&monitor_str, VALUE_WIDTH);
             println!("│ {:<19} │ {:<34} │", "", formatted_monitor);
