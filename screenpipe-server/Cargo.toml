@@ -40,6 +40,7 @@ rand = "0.8.5"
 axum = "0.7.5"
 tokio = { version = "1.15", features = ["full", "tracing"] }
 tower-http = { version = "0.5.2", features = ["cors", "trace"] }
+tokio-stream = "0.1.14"
 
 # Log
 log = { workspace = true }
@@ -79,6 +80,8 @@ rust-stemmers = "1.2.0"
 
 # base64
 base64 = "0.22.1"
+
+uuid = "1.5.0"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 ort = { version = "2.0.0-rc.5", features = ["download-binaries", "copy-dylibs", "directml", "cuda"] }
